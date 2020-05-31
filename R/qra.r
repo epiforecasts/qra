@@ -15,7 +15,7 @@ qra_weighted_average_interval_score <-
     models <- unique(x$model)
     mw <- tidyr::expand_grid(model = models,
                       centile = unique(x$centile))
- 
+
     if (per_centile_weights) {
       mw <- mw %>%
         dplyr::mutate(weight = weights)
@@ -23,7 +23,7 @@ qra_weighted_average_interval_score <-
       mw <- mw %>%
         dplyr::mutate(weight = rep(weights, each = length(unique(x$centile))))
     }
-      
+
     y <- x %>%
       dplyr::left_join(mw, by = c("model", "centile"))
 
@@ -180,7 +180,6 @@ qra <- function(forecasts, data, target_date, min_date, max_date,
     setdiff(colnames(obs_and_pred),
             c("creation_date", "value", "model", "data",
               "centile", "boundary", "interval", pool))
-
   pooling_vars <-
     c("creation_date", "model", pool)
 
@@ -198,7 +197,9 @@ qra <- function(forecasts, data, target_date, min_date, max_date,
 
   ## require a complete set to be include in QRA
   complete_set <- obs_and_pred_double_alpha %>%
-    dplyr::group_by_at(tidyselect::all_of(c(grouping_vars, "interval"))) %>%
+    dplyr::group_by_at(
+             tidyselect::all_of(
+                           c(grouping_vars, "creation_date", "interval"))) %>%
     ## create complete tibble of all combinations of creation date, mmodel
     ## and pooling variables
     tidyr::complete(!!!syms(pooling_vars)) %>%
@@ -206,7 +207,8 @@ qra <- function(forecasts, data, target_date, min_date, max_date,
     dplyr::filter(horizon <= max_horizon) %>%
     dplyr::select(-max_horizon) %>%
     ## check if anything is missing and filter out
-    dplyr::group_by_at(tidyselect::all_of(c(grouping_vars, "model"))) %>%
+    dplyr::group_by_at(
+             tidyselect::all_of(c(grouping_vars, "creation_date", "model"))) %>%
     dplyr::mutate(any_na = any(is.na(value))) %>%
     dplyr::filter(!any_na) %>%
     dplyr::select(-any_na) %>%
@@ -219,6 +221,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date,
 
   ## perform QRA
   weights <- complete_set %>%
+    filter(value_type == "death_inc_line") %>%
     tidyr::nest(test_data = c(-grouping_vars)) %>%
     dplyr::mutate(weights =
                     purrr::map(test_data, qra_estimate_weights,
@@ -226,6 +229,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date,
     tidyr::unnest(weights) %>%
     dplyr::select(-test_data)
 
+  if (nrow(weights) > 0) {
   ensemble <- latest_forecasts %>%
     ## only keep value dates which have all models present
     dplyr::group_by_at(tidyselect::all_of(c(grouping_vars, "value_date"))) %>%
@@ -252,6 +256,13 @@ qra <- function(forecasts, data, target_date, min_date, max_date,
     dplyr::arrange(centile) %>%
     dplyr::mutate(centile = paste0("percentile_", sprintf("%.2f", centile))) %>%
     tidyr::spread(centile, weight)
+  } else {
+    ensemble <- latest_forecasts %>%
+      filter(FALSE)
+    weights_ret <- NULL
+  }
+
+
 
   return(list(ensemble = ensemble, weights = weights_ret))
 }
