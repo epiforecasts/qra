@@ -221,7 +221,6 @@ qra <- function(forecasts, data, target_date, min_date, max_date,
 
   ## perform QRA
   weights <- complete_set %>%
-    filter(value_type == "death_inc_line") %>%
     tidyr::nest(test_data = c(-grouping_vars)) %>%
     dplyr::mutate(weights =
                     purrr::map(test_data, qra_estimate_weights,
@@ -261,8 +260,6 @@ qra <- function(forecasts, data, target_date, min_date, max_date,
       filter(FALSE)
     weights_ret <- NULL
   }
-
-
 
   return(list(ensemble = ensemble, weights = weights_ret))
 }
