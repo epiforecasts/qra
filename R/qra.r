@@ -187,13 +187,11 @@ qra <- function(forecasts, data, target_date, min_date, max_date,
   ## are available
   max_horizons <- obs_and_pred_double_alpha %>%
     dplyr::group_by_at(
-             tidyselect::all_of(c(grouping_vars, "creation_date"))) %>%
+             tidyselect::all_of(c(grouping_vars, "model", "creation_date"))) %>%
     dplyr::mutate(max_horizon = max(horizon)) %>%
     dplyr::group_by_at(tidyselect::all_of(grouping_vars)) %>%
-    dplyr::mutate(max_horizon = min(max_horizon)) %>%
-    dplyr::ungroup() %>%
-    dplyr::select(tidyselect::all_of(c(grouping_vars, "max_horizon"))) %>%
-    dplyr::distinct()
+    dplyr::summarise(max_horizon = min(max_horizon)) %>%
+    dplyr::ungroup()
 
   ## require a complete set to be include in QRA
   complete_set <- obs_and_pred_double_alpha %>%
