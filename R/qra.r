@@ -154,8 +154,12 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     creation_dates <- creation_dates[creation_dates <= max_date]
   }
   if (!missing(history)) {
-    creation_dates <-
-      creation_dates[length(creation_dates) - seq(0, history - 1)]
+    if (history <= length(creation_dates)) {
+      creation_dates <-
+        creation_dates[length(creation_dates) - seq(0, history - 1)]
+    } else {
+      creation_dates <- c()
+    }
   }
 
   obs_and_pred <- obs_and_pred %>%
