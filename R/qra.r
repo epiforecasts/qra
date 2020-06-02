@@ -109,6 +109,7 @@ qra_estimate_weights <-
 #' the latest \code{creation_date} in \code{forecasts} 
 ##' @param min_date the minimum creation date for past forecasts to be included
 ##' @param max_date the maximum creation date for past forecasts to be included
+##' @param history number of historical forecasts to include
 ##' @param pool any columns to pool as a list of character vectors (e.g.,
 ##' horizon, geography_scale, etc.); by default, will not pool across anything
 ##' @param intervals Numeric - which central intervals to consider; by default will
@@ -126,12 +127,16 @@ qra_estimate_weights <-
 ##' but with \code{model} set to "Quantile regression average" and the values
 ##' set to the weighted averages; and `weights`, a data frame giving the weights
 ##' @export
-qra <- function(forecasts, data, target_date, min_date, max_date,
+qra <- function(forecasts, data, target_date, min_date, max_date, history,
                 pool, intervals,
                 per_centile_weights = FALSE, enforce_normalisation = TRUE) {
 
   if (missing(target_date)) {target_date <- max(forecasts$creation_date)}
   if (missing(pool)) {pool <- c()}
+
+  if (!missing(history) && (!missing(min_date) || !missing(max_date))) {
+    stop("If 'history' is given, 'min_date' and 'max_date' can't be." )
+  }
 
   latest_forecasts <- forecasts %>%
     dplyr::filter(creation_date == target_date)
@@ -147,6 +152,10 @@ qra <- function(forecasts, data, target_date, min_date, max_date,
   }
   if (!missing(max_date)) {
     creation_dates <- creation_dates[creation_dates <= max_date]
+  }
+  if (!missing(history)) {
+    creation_dates <-
+      creation_dates[length(creation_dates) - seq(0, history - 1)]
   }
 
   obs_and_pred <- obs_and_pred %>%
