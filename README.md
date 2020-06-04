@@ -30,6 +30,8 @@ national level
 ```r
 library("qra")
 library("dplyr")
+library("tidyr")
+library("readr")
 df <- tidyr::expand_grid(
                       value_type = c("cases", "deaths"),
                       geography = c(paste("region", 1:3), "country"),
@@ -43,7 +45,7 @@ df <- tidyr::expand_grid(
            dplyr::if_else(grepl("region", geography), "region", "nation"))
 ```
 
-### create toy "forecasts" (just draws from negative binomials)
+### create toy "forecasts" (draws from negative binomial distributions)
 
 
 ```r
@@ -57,9 +59,10 @@ flist <- lapply(seq_along(mean), function(x) {
     dplyr::mutate(model = paste("model", x),
                   quantiles = list(as_tibble(t(setNames(
                     qnbinom(quantile_levels, size = 1/k[x], mu = mean[x]),
-                    paste0("percentile_",
-                           sprintf("%.2f", quantile_levels))))))) %>%
-    tidyr::unnest(quantiles)
+                    paste0("quantile_", quantile_levels)))))) %>%
+    tidyr::unnest(quantiles) %>%
+    tidyr::gather(quantile, value, starts_with("quantile_")) %>%
+    dplyr::mutate(quantile = readr::parse_number(quantile))
 })
 
 forecasts <- flist %>%
@@ -73,6 +76,8 @@ forecasts <- flist %>%
 true_mean <- 25L
 true_k <- 2
 data <- df %>%
+  select(value_type, geography, value_date) %>%
+  distinct() %>%
   mutate(value = rnbinom(n(), true_mean, 1/true_k))
 ```
 
