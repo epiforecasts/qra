@@ -193,8 +193,6 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   }
 
   ## create training data set
-  ##:ess-bp-start::browser@nil:##
-browser(expr=is.null(.ESSBP.[["@14@"]]));##:ess-bp-end:##
   obs_and_pred <- obs_and_pred %>%
     dplyr::filter(creation_date %in% creation_dates) %>%
     dplyr::filter(model %in% unique(latest_forecasts$model)) %>%
@@ -277,15 +275,14 @@ browser(expr=is.null(.ESSBP.[["@14@"]]));##:ess-bp-end:##
   if (nrow(weights) > 0) {
     ensemble <- latest_forecasts %>%
       ## only keep value dates which have all models present
-      dplyr::group_by_at(tidyselect::all_of(c(grouping_vars, "value_date"))) %>%
+      dplyr::group_by_at(
+               tidyselect::all_of(c(grouping_vars, "value_date", "quantile"))) %>%
       dplyr::mutate(n = n()) %>%
       dplyr::group_by_at(tidyselect::all_of(grouping_vars)) %>%
       dplyr::filter(n == max(n)) %>%
       dplyr::select(-n) %>%
       ## join weights
-      tidyr::gather(quantile, value, starts_with("perquantile_")) %>%
-      dplyr::mutate(quantile = readr::parse_number(quantile),
-                    horizon = value_date - creation_date) %>%
+      dplyr::mutate(horizon = value_date - creation_date) %>%
       dplyr::inner_join(weights, by = c(grouping_vars, "model", "quantile")) %>%
       dplyr::select(-horizon) %>%
       ## weigh quantiles
