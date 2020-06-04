@@ -2,29 +2,36 @@
 % Please edit documentation in R/qra.r
 \name{qra_weighted_average_interval_score}
 \alias{qra_weighted_average_interval_score}
-\title{Calculates an weighted interval score}
+\title{Helper function to calculate a weighted average interval score for a set of
+model predictions and data and using a given set of weights}
 \usage{
 qra_weighted_average_interval_score(
   weights,
   x,
   enforce_normalisation,
-  per_centile_weights
+  per_quantile_weights
 )
 }
 \arguments{
-\item{weights}{weights of the models}
+\item{weights}{weights given to each models, as real vector}
 
-\item{x}{input data frame}
+\item{x}{input data frame, containing the columns \code{model}, \code{quantile} and
+\code{value}}
 
-\item{enforce_normalisation}{if TRUE, normalisation (weights sum to 1) is enforced}
+\item{enforce_normalisation}{if TRUE, normalisation (weights >0 and sum to
+\enumerate{
+\item is enforced by adding a penalty to the score if the weights are not
+normalised
+}}
 
-\item{per_centile_weights}{if TRUE, separate weights are calculated for
-different centiles}
+\item{per_quantile_weights}{if TRUE, separate weights are calculated for
+each quantiles}
 }
 \value{
-average interval score
+an average interval score
 }
 \description{
-Calculates an weighted interval score
+Helper function to calculate a weighted average interval score for a set of
+model predictions and data and using a given set of weights
 }
 \keyword{internal}

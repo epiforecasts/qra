@@ -11,16 +11,24 @@ qra(
   target_date,
   min_date,
   max_date,
+  history,
   pool,
   intervals,
-  per_centile_weights = FALSE,
+  per_quantile_weights = FALSE,
   enforce_normalisation = TRUE
 )
 }
 \arguments{
-\item{forecasts}{data frame with forecasts}
+\item{forecasts}{data frame with forecasts; this is expected to have columns
+\code{model} (a character string), \code{creation_date} (the date at which the
+forecast was made), \code{value_date} (the date for which a forecsat was
+created), \code{quantile} (the quantile level, between 0 and
+\enumerate{
+\item and \code{value} (the forecast at the quantile level)
+}}
 
-\item{data}{data frame with data}
+\item{data}{data frame with a \code{value} column, and otherwise matching columns
+to \code{forecasts} (especially \code{value_date})}
 
 \item{target_date}{the date for which to create a QRA; by default, will use
 the latest \code{creation_date} in \code{forecasts}}
@@ -29,17 +37,24 @@ the latest \code{creation_date} in \code{forecasts}}
 
 \item{max_date}{the maximum creation date for past forecasts to be included}
 
+\item{history}{number of historical forecasts to include}
+
 \item{pool}{any columns to pool as a list of character vectors (e.g.,
-horizon, geography_scale, etc.); by default, will not pool across anything}
+"horizon", "geography_scale", etc.) indicating columns in the \code{forecasts}
+and \code{data} data frames; by default, will not pool across anything}
 
 \item{intervals}{Numeric - which central intervals to consider; by default will
 consider the maximum spanning set. Options are determined by data but will be between
 0 and 1.}
 
-\item{per_centile_weights}{if TRUE, separate weights are calculated for
-different centiles}
+\item{per_quantile_weights}{if TRUE, separate weights are calculated for
+each quantiles}
 
-\item{enforce_normalisation}{if TRUE, normalisation (weights sum to 1) is enforced}
+\item{enforce_normalisation}{if TRUE, normalisation (weights >0 and sum to
+\enumerate{
+\item is enforced by adding a penalty to the score if the weights are not
+normalised
+}}
 }
 \value{
 a list of \code{ensemble}, a data frame similar to the input forecast,

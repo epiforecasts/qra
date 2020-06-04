@@ -2,24 +2,28 @@
 % Please edit documentation in R/qra.r
 \name{qra_estimate_weights}
 \alias{qra_estimate_weights}
-\title{Estimate weights for QRA for a data frame containing \code{model}, \code{centile},
-\code{boundary},  \code{value}, \code{interval} columns}
+\title{Helper function to estimate weights for QRA.}
 \usage{
-qra_estimate_weights(x, per_centile_weights, enforce_normalisation)
+qra_estimate_weights(x, per_quantile_weights, enforce_normalisation)
 }
 \arguments{
-\item{x}{input data frame}
+\item{x}{input data frame containing \code{model}, \code{quantile}, \code{boundary},
+\code{value}, \code{interval} columns.}
 
-\item{per_centile_weights}{if TRUE, separate weights are calculated for
-different centiles}
+\item{per_quantile_weights}{if TRUE, separate weights are calculated for
+each quantiles}
 
-\item{enforce_normalisation}{if TRUE, normalisation (weights sum to 1) is enforced}
+\item{enforce_normalisation}{if TRUE, normalisation (weights >0 and sum to
+\enumerate{
+\item is enforced by adding a penalty to the score if the weights are not
+normalised
+}}
 }
 \value{
-data frame with weights
+data frame with weights per quantile (which won't vary unless
+\code{per_quantile_weights} is set to TRUE), per model
 }
 \description{
-Estimate weights for QRA for a data frame containing \code{model}, \code{centile},
-\code{boundary},  \code{value}, \code{interval} columns
+for a data frame
 }
 \keyword{internal}
