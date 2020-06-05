@@ -1,7 +1,7 @@
 ##' Helper function to calculate a weighted average interval score for a set of
 ##' model predictions and data and using a given set of weights
 ##'
-##' @param weights weights given to each models, as real vector
+##' @param weights weights given to each model, as real vector
 ##' @param x input data frame, containing the columns `model`, `quantile` and
 ##' `value`  
 ##' @param enforce_normalisation if TRUE, normalisation (weights >0 and sum to

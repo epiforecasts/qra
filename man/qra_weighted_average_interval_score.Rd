@@ -13,7 +13,7 @@ qra_weighted_average_interval_score(
 )
 }
 \arguments{
-\item{weights}{weights given to each models, as real vector}
+\item{weights}{weights given to each model, as real vector}
 
 \item{x}{input data frame, containing the columns \code{model}, \code{quantile} and
 \code{value}}
