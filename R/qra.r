@@ -2,11 +2,11 @@
 ##' model predictions and data and using a given set of weights
 ##'
 ##' @param weights weights given to each model, as real vector
-##' @param x input data frame, containing the columns `model`, `quantile` and
-##' `value`  
+##' @param x input data frame, containing the columns \code{model}, \code{quantile} and
+##' \code{value}
 ##' @param enforce_normalisation if TRUE, normalisation (weights >0 and sum to
 ##' 1) is enforced by adding a penalty to the score if the weights are not
-##' normalised 
+##' normalised
 ##' @param per_quantile_weights if TRUE, separate weights are calculated for
 ##' each quantiles
 ##' @importFrom dplyr rowwise summarise ungroup mutate group_by_at vars
@@ -32,7 +32,10 @@ qra_weighted_average_interval_score <-
 
     ## join weights with input data frame
     y <- x %>%
-      dplyr::left_join(mw, by = c("model", "quantile"))
+      dplyr::left_join(mw, by = c("model", "quantile")) %>%
+      dplyr::group_by(quantile) %>%
+      dplyr::mutate(weight = weight / sum(weight, na.rm = TRUE)) %>%
+      ungroup()
 
     ## calculate mean score
     mean_score <- y %>%
@@ -65,12 +68,12 @@ qra_weighted_average_interval_score <-
 
 ##' Helper function to estimate weights for QRA.
 ##'
-##' for a data frame 
+##' for a data frame
 ##'
-##' @param x input data frame containing `model`, `quantile`, `boundary`,
-##' `value`, `interval` columns. 
+##' @param x input data frame containing \code{model}, \code{quantile}, \code{boundary},
+##' \code{value}, \code{interval} columns.
 ##' @return data frame with weights per quantile (which won't vary unless
-##' `per_quantile_weights` is set to TRUE), per model
+##' \code{per_quantile_weights} is set to TRUE), per model
 ##' @inheritParams qra_weighted_average_interval_score
 ##' @importFrom nloptr sbplx
 ##' @importFrom dplyr mutate
@@ -78,7 +81,7 @@ qra_weighted_average_interval_score <-
 ##' @keywords internal
 qra_estimate_weights <-
   function(x, per_quantile_weights, enforce_normalisation) {
- 
+
   ## number of models
   nmodels <- length(unique(x$model))
   ## number of quantiles
@@ -112,7 +115,7 @@ qra_estimate_weights <-
   }
 
   ## create return tibble
-  ret <- tidyr::expand_grid(model = unique(x$model), 
+  ret <- tidyr::expand_grid(model = unique(x$model),
                             quantile = unique(x$quantile)) %>%
     dplyr::mutate(weight = weights)
 
@@ -123,34 +126,34 @@ qra_estimate_weights <-
 ##' @title Quantile Regression Average
 ##' Calculates a quantile regression average for forecasts.
 ##' @param forecasts data frame with forecasts; this is expected to have columns
-##' `model` (a character string), `creation_date` (the date at which the
-##' forecast was made), `value_date` (the date for which a forecsat was
-##' created), `quantile` (the quantile level, between 0 and
-##' 1) and `value` (the forecast at the quantile level)
-##' @param data data frame with a `value` column, and otherwise matching columns
-##' to `forecasts` (especially `value_date`)
+##' \code{model} (a character string), \code{creation_date} (the date at which the
+##' forecast was made), \code{value_date} (the date for which a forecsat was
+##' created), \code{quantile} (the quantile level, between 0 and
+##' 1) and \code{value} (the forecast at the quantile level)
+##' @param data data frame with a \code{value} column, and otherwise matching columns
+##' to \code{forecasts} (especially \code{value_date})
 ##' @param target_date the date for which to create a QRA; by default, will use
-#' the latest \code{creation_date} in \code{forecasts} 
+#' the latest \\code{creation_date} in \\code{forecasts}
 ##' @param min_date the minimum creation date for past forecasts to be included
 ##' @param max_date the maximum creation date for past forecasts to be included
 ##' @param history number of historical forecasts to include
 ##' @param pool any columns to pool as a list of character vectors (e.g.,
-##' "horizon", "geography_scale", etc.) indicating columns in the `forecasts`
-##' and `data` data frames; by default, will not pool across anything
+##' "horizon", "geography_scale", etc.) indicating columns in the \code{forecasts}
+##' and \code{data} data frames; by default, will not pool across anything
 ##' @param intervals Numeric - which central intervals to consider; by default will
 ##' consider the maximum spanning set. Options are determined by data but will be between
 ##' 0 and 1.
 ##' @importFrom dplyr filter arrange desc inner_join mutate rename select bind_rows group_by_at starts_with
 ##' @importFrom tidyr gather complete nest spread
-##' @importFrom rlang `!!!` syms
+##' @importFrom rlang \code{!!!} syms
 ##' @importFrom readr parse_number
 ##' @importFrom tidyselect all_of
 ##' @importFrom purrr map
 ##' @importFrom future.apply future_lapply
 ##' @inheritParams qra_weighted_average_interval_score
-##' @return a list of `ensemble`, a data frame similar to the input forecast,
-##' but with \code{model} set to "Quantile regression average" and the values
-##' set to the weighted averages; and `weights`, a data frame giving the weights
+##' @return a list of \code{ensemble}, a data frame similar to the input forecast,
+##' but with \\code{model} set to "Quantile regression average" and the values
+##' set to the weighted averages; and \code{weights}, a data frame giving the weights
 ##' @export
 qra <- function(forecasts, data, target_date, min_date, max_date, history,
                 pool, intervals,
@@ -186,7 +189,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   if (!missing(history)) {
     if (history <= length(creation_dates)) {
       creation_dates <-
-        creation_dates[length(creation_dates) - seq(0, history - 1)]
+        creation_dates[seq_len(history)]
     } else {
       creation_dates <- c()
     }
@@ -295,7 +298,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     weights_ret <- weights %>%
       dplyr::arrange(quantile) %>%
       dplyr::mutate(quantile =
-                      paste0("perquantile_", sprintf("%.2f", quantile))) %>%
+                      paste0("percentile_", sprintf("%.2f", quantile))) %>%
       tidyr::spread(quantile, weight)
   } else {
     ensemble <- latest_forecasts %>%
