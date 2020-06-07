@@ -39,8 +39,7 @@ qra_weighted_average_interval_score <-
 
     ## calculate mean score
     mean_score <- y %>%
-      dplyr::group_by_at(dplyr::vars(-model, -value, -quantile, -weight,
-                                     -data)) %>%
+      dplyr::group_by_at(dplyr::vars(-model, -value, -quantile, -weight)) %>%
       dplyr::summarise(value = sum(value * weight) / sum(weight)) %>%
       dplyr::ungroup() %>%
       tidyr::spread(boundary, value) %>%
