@@ -17,7 +17,7 @@
 qra_weighted_average_interval_score <-
   function(weights, x, enforce_normalisation, per_quantile_weights) {
     ## build tibble holding the per-model, (possibly) per-quantile weights
-    models <- unique(x$model)
+    models <- levels(x$model)
     mw <- tidyr::expand_grid(model = models,
                       quantile = unique(x$quantile))
 
@@ -39,8 +39,9 @@ qra_weighted_average_interval_score <-
 
     ## calculate mean score
     mean_score <- y %>%
-      dplyr::group_by_at(dplyr::vars(-model, -value, -quantile, -weight)) %>%
-      dplyr::summarise(value = sum(value * weight)) %>%
+      dplyr::group_by_at(dplyr::vars(-model, -value, -quantile, -weight,
+                                     -data)) %>%
+      dplyr::summarise(value = sum(value * weight) / sum(weight)) %>%
       dplyr::ungroup() %>%
       tidyr::spread(boundary, value) %>%
       dplyr::rowwise() %>%
@@ -81,7 +82,10 @@ qra_weighted_average_interval_score <-
 ##' @keywords internal
 qra_estimate_weights <-
   function(x, per_quantile_weights, enforce_normalisation) {
-
+ 
+  ## change x to only have present models
+  x <- x %>%
+  mutate(model = factor(x$model))
   ## number of models
   nmodels <- length(unique(x$model))
   ## number of quantiles
