@@ -198,10 +198,23 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     }
   }
 
+  ## create helper vars for creating a complete set of models to be used for
+  ## training below
+  grouping_vars <-
+    setdiff(colnames(obs_and_pred),
+            c("creation_date", "value_date", "value", "model", "data",
+              "quantile", "boundary", "interval", pool))
+  pooling_vars <-
+    c("creation_date", "model", pool)
+
+  present_models <- latest_forecasts %>%
+    dplyr::select_at(tidyselect::all_of(c("model", grouping_vars))) %>%
+    distinct()
+
   ## create training data set
   obs_and_pred <- obs_and_pred %>%
     dplyr::filter(creation_date %in% creation_dates) %>%
-    dplyr::filter(model %in% unique(latest_forecasts$model)) %>%
+    dplyr::inner_join(present_models, by = colnames(present_models)) %>%
     dplyr::inner_join(data,
                by = setdiff(colnames(data), c("value"))) %>%
     dplyr::rename(value = value.x, data = value.y) %>%
@@ -225,15 +238,6 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
 
   obs_and_pred_double_alpha <- obs_and_pred %>%
     dplyr::bind_rows(alpha_lower)
-
-  ## create helper vars for creating a complete set of models to be used for
-  ## training below
-  grouping_vars <-
-    setdiff(colnames(obs_and_pred),
-            c("creation_date", "value", "model", "data",
-              "quantile", "boundary", "interval", pool))
-  pooling_vars <-
-    c("creation_date", "model", pool)
 
   ## maximum horizon by grouping variables - the last date on which all models
   ## are available
