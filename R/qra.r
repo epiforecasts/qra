@@ -146,6 +146,7 @@ qra_estimate_weights <-
 ##' @param intervals Numeric - which central intervals to consider; by default will
 ##' consider the maximum spanning set. Options are determined by data but will be between
 ##' 0 and 1.
+##' @param max_future Numeric - the maximum number of days of forecast to consider
 ##' @importFrom dplyr filter arrange desc inner_join mutate rename select bind_rows group_by_at starts_with
 ##' @importFrom tidyr gather complete nest spread
 ##' @importFrom rlang \code{!!!} syms
@@ -159,7 +160,7 @@ qra_estimate_weights <-
 ##' set to the weighted averages; and \code{weights}, a data frame giving the weights
 ##' @export
 qra <- function(forecasts, data, target_date, min_date, max_date, history,
-                pool, intervals,
+                pool, intervals, max_future = Inf,
                 per_quantile_weights = FALSE, enforce_normalisation = TRUE) {
 
   ## set target date to last forecast date if missing
@@ -242,10 +243,11 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   ## maximum horizon by grouping variables - the last date on which all models
   ## are available
   max_horizons <- obs_and_pred_double_alpha %>%
+    filter(horizon <= max_future) %>%
     dplyr::group_by_at(
              tidyselect::all_of(c(grouping_vars, "model", "creation_date"))) %>%
     dplyr::mutate(max_horizon = max(horizon)) %>%
-    dplyr::group_by_at(tidyselect::all_of(grouping_vars)) %>%
+    dplyr::group_by_at(tidyselect::all_of(c(grouping_vars, "creation_date"))) %>%
     dplyr::summarise(max_horizon = min(max_horizon)) %>%
     dplyr::ungroup()
 
