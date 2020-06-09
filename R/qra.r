@@ -203,13 +203,14 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   ## training below
   grouping_vars <-
     setdiff(colnames(obs_and_pred),
-            c("creation_date", "value_date", "value", "model", "data",
+            c("value_date", "value", "model", "data",
               "quantile", "boundary", "interval", pool))
   pooling_vars <-
     c("creation_date", "model", pool)
 
   present_models <- latest_forecasts %>%
     dplyr::select_at(tidyselect::all_of(c("model", grouping_vars))) %>%
+    select(-creation_date) %>%
     distinct()
 
   ## create training data set
@@ -245,9 +246,9 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   max_horizons <- obs_and_pred_double_alpha %>%
     filter(horizon <= max_future) %>%
     dplyr::group_by_at(
-             tidyselect::all_of(c(grouping_vars, "model", "creation_date"))) %>%
+             tidyselect::all_of(c(grouping_vars, "model"))) %>%
     dplyr::mutate(max_horizon = max(horizon)) %>%
-    dplyr::group_by_at(tidyselect::all_of(c(grouping_vars, "creation_date"))) %>%
+    dplyr::group_by_at(tidyselect::all_of(c(grouping_vars))) %>%
     dplyr::summarise(max_horizon = min(max_horizon)) %>%
     dplyr::ungroup()
 
@@ -255,7 +256,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   complete_set <- obs_and_pred_double_alpha %>%
     dplyr::group_by_at(
              tidyselect::all_of(
-                           c(grouping_vars, "creation_date", "interval"))) %>%
+                           c(grouping_vars, "interval"))) %>%
     ## create complete tibble of all combinations of creation date, model
     ## and pooling variables
     tidyr::complete(!!!syms(pooling_vars)) %>%
@@ -264,20 +265,15 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     dplyr::select(-max_horizon) %>%
     ## check if anything is missing and filter out
     dplyr::group_by_at(
-             tidyselect::all_of(c(grouping_vars, "creation_date", "model"))) %>%
+             tidyselect::all_of(c(grouping_vars, "model"))) %>%
     dplyr::mutate(any_na = any(is.na(value))) %>%
     dplyr::filter(!any_na) %>%
     dplyr::select(-any_na) %>%
-    ## check that more than 1 model is available
-    dplyr::group_by_at(tidyselect::all_of(grouping_vars)) %>%
-    dplyr::mutate(n = length(unique(model))) %>%
-    dplyr::ungroup() %>%
-    dplyr::filter(n > 1) %>%
-    dplyr::select(-n)
+    ungroup()
 
   ## perform QRA
   weights <- complete_set %>%
-    tidyr::nest(test_data = c(-grouping_vars)) %>%
+    tidyr::nest(test_data = c(-setdiff(grouping_vars, "creation_date"))) %>%
     dplyr::mutate(weights =
                     purrr::map(test_data, qra_estimate_weights,
                                per_quantile_weights, enforce_normalisation)) %>%
@@ -286,6 +282,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
 
   if (nrow(weights) > 0) {
     ensemble <- latest_forecasts %>%
+      mutate(creation_date = target_date) %>%
       ## only keep value dates which have all models present
       dplyr::group_by_at(
                tidyselect::all_of(c(grouping_vars, "value_date", "quantile"))) %>%
@@ -295,7 +292,8 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
       dplyr::select(-n) %>%
       ## join weights
       dplyr::mutate(horizon = value_date - creation_date) %>%
-      dplyr::inner_join(weights, by = c(grouping_vars, "model", "quantile")) %>%
+      dplyr::inner_join(weights, by = c(setdiff(grouping_vars, "creation_date"),
+                                        "model", "quantile")) %>%
       dplyr::select(-horizon) %>%
       ## weigh quantiles
       dplyr::group_by_at(dplyr::vars(-model, -weight, -value)) %>%
