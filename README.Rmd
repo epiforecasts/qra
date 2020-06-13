@@ -1,6 +1,6 @@
 ## Quantile regression average
 
-This is just example code. It will probably eventually be merged into the
+NB: This is a transient package that will probably be merged into the
 [stackr package](https://github.com/nikosbosse/stackr). 
 
 ## Prerequisites
