@@ -81,7 +81,7 @@ qra_weighted_average_interval_score <-
 ##' @keywords internal
 qra_estimate_weights <-
   function(x, per_quantile_weights, enforce_normalisation) {
- 
+
   ## change x to only have present models
   x <- x %>%
   mutate(model = factor(x$model))
@@ -179,7 +179,8 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   ## prepare data frame containing data and predictions
   obs_and_pred <- forecasts %>%
     dplyr::filter(creation_date < target_date) %>%
-    dplyr::arrange(dplyr::desc(creation_date))
+    dplyr::arrange(dplyr::desc(creation_date)) %>%
+    dplyr::mutate(horizon = value_date - creation_date)
 
   creation_dates <- unique(obs_and_pred$creation_date)
 
@@ -216,12 +217,30 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   ## create training data set
   obs_and_pred <- obs_and_pred %>%
     dplyr::filter(creation_date %in% creation_dates) %>%
-    dplyr::inner_join(present_models, by = colnames(present_models)) %>%
+    ## select present models
+    dplyr::inner_join(present_models, by = colnames(present_models))
+
+  ## maximum horizon by grouping variables - the last date on which all models
+  ## are available
+  max_horizons <- obs_and_pred %>%
+    filter(horizon <= max_future) %>%
+    dplyr::group_by_at(
+             tidyselect::all_of(c(setdiff(grouping_vars, "horizon"), "model"))) %>%
+    dplyr::mutate(max_horizon = max(horizon)) %>%
+    dplyr::group_by_at(tidyselect::all_of(c(grouping_vars))) %>%
+    dplyr::summarise(max_horizon = min(max_horizon)) %>%
+    dplyr::ungroup()
+
+  obs_and_pred <- obs_and_pred %>%
+    ## filter <= max horizon
+    dplyr::left_join(max_horizons, by = grouping_vars) %>%
+    dplyr::filter(horizon <= max_horizon) %>%
+    dplyr::select(-max_horizon) %>%
+    ## join data
     dplyr::inner_join(data,
                by = setdiff(colnames(data), c("value"))) %>%
     dplyr::rename(value = value.x, data = value.y) %>%
-    dplyr::mutate(horizon = value_date - creation_date) %>%
-    dplyr::select(-value_date) %>%
+    ## work out intervals and boundaries
     dplyr::mutate(interval = round(2 * abs(quantile - 0.5), 2),
                   boundary =
                     dplyr::if_else(quantile < 0.5, "lower", "upper"))
@@ -239,18 +258,8 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     dplyr::mutate(boundary = "lower")
 
   obs_and_pred_double_alpha <- obs_and_pred %>%
-    dplyr::bind_rows(alpha_lower)
-
-  ## maximum horizon by grouping variables - the last date on which all models
-  ## are available
-  max_horizons <- obs_and_pred_double_alpha %>%
-    filter(horizon <= max_future) %>%
-    dplyr::group_by_at(
-             tidyselect::all_of(c(grouping_vars, "model"))) %>%
-    dplyr::mutate(max_horizon = max(horizon)) %>%
-    dplyr::group_by_at(tidyselect::all_of(c(grouping_vars))) %>%
-    dplyr::summarise(max_horizon = min(max_horizon)) %>%
-    dplyr::ungroup()
+    dplyr::bind_rows(alpha_lower) %>%
+    select(-value_date)
 
   ## require a complete set of forecasts to be include in QRA
   complete_set <- obs_and_pred_double_alpha %>%
@@ -260,9 +269,6 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     ## create complete tibble of all combinations of creation date, model
     ## and pooling variables
     tidyr::complete(!!!syms(pooling_vars)) %>%
-    dplyr::left_join(max_horizons, by = grouping_vars) %>%
-    dplyr::filter(horizon <= max_horizon) %>%
-    dplyr::select(-max_horizon) %>%
     ## check if anything is missing and filter out
     dplyr::group_by_at(
              tidyselect::all_of(c(grouping_vars, "model"))) %>%
