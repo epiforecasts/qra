@@ -5,12 +5,7 @@
 \title{Helper function to calculate a weighted average interval score for a set of
 model predictions and data and using a given set of weights}
 \usage{
-qra_weighted_average_interval_score(
-  weights,
-  x,
-  enforce_normalisation,
-  per_quantile_weights
-)
+qra_weighted_average_interval_score(weights, x, per_quantile_weights)
 }
 \arguments{
 \item{weights}{weights given to each model, as real vector}
@@ -18,14 +13,14 @@ qra_weighted_average_interval_score(
 \item{x}{input data frame, containing the columns \code{model}, \code{quantile} and
 \code{value}}
 
+\item{per_quantile_weights}{if TRUE, separate weights are calculated for
+each quantiles}
+
 \item{enforce_normalisation}{if TRUE, normalisation (weights >0 and sum to
 \enumerate{
 \item is enforced by adding a penalty to the score if the weights are not
 normalised
 }}
-
-\item{per_quantile_weights}{if TRUE, separate weights are calculated for
-each quantiles}
 }
 \value{
 an average interval score
@@ -34,4 +29,3 @@ an average interval score
 Helper function to calculate a weighted average interval score for a set of
 model predictions and data and using a given set of weights
 }
-\keyword{internal}
