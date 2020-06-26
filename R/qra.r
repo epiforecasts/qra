@@ -264,12 +264,14 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     dplyr::select(-any_na) %>%
     ungroup()
 
+  future::plan(future::multiprocess)
+
   ## perform QRA
   weights <- complete_set %>%
     tidyr::nest(test_data = c(-setdiff(grouping_vars, "creation_date"))) %>%
     dplyr::mutate(weights =
-                    purrr::map(test_data, qra_estimate_weights,
-                               per_quantile_weights, enforce_normalisation)) %>%
+                    furrr::future_map(test_data, qra_estimate_weights,
+                                      per_quantile_weights, enforce_normalisation)) %>%
     tidyr::unnest(weights) %>%
     dplyr::select(-test_data)
 
