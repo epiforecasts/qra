@@ -15,26 +15,24 @@
 ##' @return an average interval score
 ##' @keywords internal
 qra_weighted_average_interval_score <-
-  function(weights, x, enforce_normalisation, per_quantile_weights) {
+  function(weights, x, per_quantile_weights) {
     ## build tibble holding the per-model, (possibly) per-quantile weights
-    models <- levels(x$model)
-    mw <- tidyr::expand_grid(model = models,
-                      quantile = unique(x$quantile))
+    models <- unique(x$model)
+    quantiles <-unique(x$quantile)
+    mw <- tidyr::expand_grid(model = models, quantile = quantiles)
 
     ## set weights
-    if (per_quantile_weights) {
-      mw <- mw %>%
-        dplyr::mutate(weight = weights)
-    } else {
-      mw <- mw %>%
-        dplyr::mutate(weight = rep(weights, each = length(unique(x$quantile))))
+    if (!per_quantile_weights) {
+      weights <- rep(weights, each = length(quantiles))
     }
+
+    mw <- mw %>%
+      dplyr::mutate(weight = weights)
 
     ## join weights with input data frame
     y <- x %>%
       dplyr::left_join(mw, by = c("model", "quantile")) %>%
       dplyr::group_by(quantile) %>%
-      dplyr::mutate(weight = weight / sum(weight, na.rm = TRUE)) %>%
       ungroup()
 
     ## calculate mean score
@@ -49,19 +47,6 @@ qra_weighted_average_interval_score <-
       dplyr::ungroup() %>%
       .$score %>%
       mean
-
-    ## add penalty term if normalisation is to be enforced
-    if (enforce_normalisation) {
-      ## add penalty term to enforce normalisation
-      penalty <- mw %>%
-        dplyr::group_by(quantile) %>%
-        dplyr::summarise(score = abs(1 - sum(weight))^2 * 1e+10) %>%
-        dplyr::ungroup() %>%
-        .$score %>%
-        mean
-
-      mean_score <- mean_score + penalty
-    }
 
   return(mean_score)
 }
@@ -84,9 +69,10 @@ qra_estimate_weights <-
 
   ## change x to only have present models
   x <- x %>%
-  mutate(model = factor(x$model))
+    mutate(model = factor(x$model))
   ## number of models
   nmodels <- length(unique(x$model))
+  init_weight <- 1 / nmodels
   ## number of quantiles
   nquant <- length(unique(x$quantile))
 
@@ -97,18 +83,19 @@ qra_estimate_weights <-
   }
 
   ## initial weights
-  init_weights <- rep(1/nmodels, nweights)
+  init_weights <- rep(init_weight, nweights)
   ## set up optimisation
-  sbplx_opts <-
+  slsqp_opts <-
     list(x0 = init_weights, fn = qra_weighted_average_interval_score,
-         x = x, per_quantile_weights = per_quantile_weights,
-         enforce_normalisation = enforce_normalisation,
-         control = list(xtol_rel = 10))
+         x = x, per_quantile_weights = per_quantile_weights)
   if (enforce_normalisation) {
-    sbplx_opts[["lower"]] <- rep(0, length(init_weights))
-    sbplx_opts[["upper"]] <- rep(1, length(init_weights))
+    slsqp_opts[["lower"]] <- rep(0, length(init_weights))
+    slsqp_opts[["upper"]] <- rep(1, length(init_weights))
+    heq <- function(x) sum(x) - 1
+    slsqp_opts[["heq"]] <- heq
+    slsqp_opts[["heqjac"]] <- function(x) nl.jacobian(x, heq)
   }
-  res <- do.call(nloptr::sbplx, sbplx_opts)
+  res <- do.call(nloptr::slsqp, slsqp_opts)
 
   ## retrieve weights from optimisation
   if (per_quantile_weights) {
