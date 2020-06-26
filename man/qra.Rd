@@ -14,6 +14,7 @@ qra(
   history,
   pool,
   intervals,
+  max_future = Inf,
   per_quantile_weights = FALSE,
   enforce_normalisation = TRUE
 )
@@ -31,7 +32,7 @@ created), \code{quantile} (the quantile level, between 0 and
 to \code{forecasts} (especially \code{value_date})}
 
 \item{target_date}{the date for which to create a QRA; by default, will use
-the latest \code{creation_date} in \code{forecasts}}
+the latest \\code{creation_date} in \\code{forecasts}}
 
 \item{min_date}{the minimum creation date for past forecasts to be included}
 
@@ -47,6 +48,8 @@ and \code{data} data frames; by default, will not pool across anything}
 consider the maximum spanning set. Options are determined by data but will be between
 0 and 1.}
 
+\item{max_future}{Numeric - the maximum number of days of forecast to consider}
+
 \item{per_quantile_weights}{if TRUE, separate weights are calculated for
 each quantiles}
 
@@ -58,7 +61,7 @@ normalised
 }
 \value{
 a list of \code{ensemble}, a data frame similar to the input forecast,
-but with \code{model} set to "Quantile regression average" and the values
+but with \\code{model} set to "Quantile regression average" and the values
 set to the weighted averages; and \code{weights}, a data frame giving the weights
 }
 \description{

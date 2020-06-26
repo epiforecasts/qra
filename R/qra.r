@@ -136,11 +136,11 @@ qra_estimate_weights <-
 ##' @param max_future Numeric - the maximum number of days of forecast to consider
 ##' @importFrom dplyr filter arrange desc inner_join mutate rename select bind_rows group_by_at starts_with
 ##' @importFrom tidyr gather complete nest spread
-##' @importFrom rlang \code{!!!} syms
+##' @importFrom rlang !!! syms
 ##' @importFrom readr parse_number
 ##' @importFrom tidyselect all_of
-##' @importFrom purrr map
-##' @importFrom future.apply future_lapply
+##' @importFrom future plan multiprocess
+##' @importFrom furrr future_map
 ##' @inheritParams qra_weighted_average_interval_score
 ##' @return a list of \code{ensemble}, a data frame similar to the input forecast,
 ##' but with \\code{model} set to "Quantile regression average" and the values
