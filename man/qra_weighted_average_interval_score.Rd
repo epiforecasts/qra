@@ -29,4 +29,3 @@ an average interval score
 Helper function to calculate a weighted average interval score for a set of
 model predictions and data and using a given set of weights
 }
-\keyword{internal}
