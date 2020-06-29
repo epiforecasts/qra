@@ -139,7 +139,7 @@ qra_estimate_weights <-
 ##' @importFrom rlang !!! syms
 ##' @importFrom readr parse_number
 ##' @importFrom tidyselect all_of
-##' @importFrom future plan
+##' @importFrom future plan multiprocess
 ##' @importFrom furrr future_map
 ##' @inheritParams qra_weighted_average_interval_score
 ##' @return a list of \code{ensemble}, a data frame similar to the input forecast,
@@ -155,8 +155,8 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   ## initialise pooling to empty vector if not given
   if (missing(pool)) {pool <- c()}
 
-  if (!missing(history) && (!missing(min_date) || !missing(max_date))) {
-    stop("If 'history' is given, 'min_date' and 'max_date' can't be." )
+  if (!missing(history) && history > 0 && (!missing(min_date) || !missing(max_date))) {
+    stop("If 'history' is given and > 0, 'min_date' and 'max_date' can't be." )
   }
 
   ## data frame with the forecasts that are being combined
@@ -178,7 +178,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   if (!missing(max_date)) {
     creation_dates <- creation_dates[creation_dates <= max_date]
   }
-  if (!missing(history)) {
+  if (!missing(history) && history > 0) {
     if (history <= length(creation_dates)) {
       creation_dates <-
         creation_dates[seq_len(history)]
@@ -264,7 +264,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     dplyr::select(-any_na) %>%
     ungroup()
 
-  future::plan(multiprocess)
+  future::plan(future::multiprocess)
 
   ## perform QRA
   weights <- complete_set %>%
