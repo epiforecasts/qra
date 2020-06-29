@@ -123,7 +123,7 @@ qra_estimate_weights <-
 ##' @param data data frame with a \code{value} column, and otherwise matching columns
 ##' to \code{forecasts} (especially \code{value_date})
 ##' @param target_date the date for which to create a QRA; by default, will use
-#' the latest \\code{creation_date} in \\code{forecasts}
+##' the latest \\code{creation_date} in \\code{forecasts}
 ##' @param min_date the minimum creation date for past forecasts to be included
 ##' @param max_date the maximum creation date for past forecasts to be included
 ##' @param history number of historical forecasts to include
@@ -134,6 +134,7 @@ qra_estimate_weights <-
 ##' consider the maximum spanning set. Options are determined by data but will be between
 ##' 0 and 1.
 ##' @param max_future Numeric - the maximum number of days of forecast to consider
+##' @param ... any options for \code{furrr::future_map}, in particular \code{.progress}
 ##' @importFrom dplyr filter arrange desc inner_join mutate rename select bind_rows group_by_at starts_with
 ##' @importFrom tidyr gather complete nest spread
 ##' @importFrom rlang !!! syms
@@ -148,7 +149,8 @@ qra_estimate_weights <-
 ##' @export
 qra <- function(forecasts, data, target_date, min_date, max_date, history,
                 pool, intervals, max_future = Inf,
-                per_quantile_weights = FALSE, enforce_normalisation = TRUE) {
+                per_quantile_weights = FALSE, enforce_normalisation = TRUE,
+                ...) {
 
   ## set target date to last forecast date if missing
   if (missing(target_date)) {target_date <- max(forecasts$creation_date)}
@@ -271,7 +273,8 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     tidyr::nest(test_data = c(-setdiff(grouping_vars, "creation_date"))) %>%
     dplyr::mutate(weights =
                     furrr::future_map(test_data, qra_estimate_weights,
-                                      per_quantile_weights, enforce_normalisation)) %>%
+                                      per_quantile_weights, enforce_normalisation,
+                                      ...)) %>%
     tidyr::unnest(weights) %>%
     dplyr::select(-test_data)
 
