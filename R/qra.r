@@ -304,6 +304,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
       dplyr::arrange(quantile) %>%
       dplyr::mutate(quantile =
                       paste0("percentile_", sprintf("%.2f", quantile))) %>%
+      unique() %>%
       tidyr::spread(quantile, weight)
   } else {
     ensemble <- latest_forecasts %>%
