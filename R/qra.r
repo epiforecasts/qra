@@ -222,8 +222,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     dplyr::mutate(weights =
                     furrr::future_map(test_data, qra_estimate_weights,
                                       per_quantile_weights, enforce_normalisation,
-                                      ...),
-                  .progress = TRUE) %>%
+                                      ...)) %>%
     tidyr::unnest(weights) %>%
     dplyr::select(-test_data)
 
