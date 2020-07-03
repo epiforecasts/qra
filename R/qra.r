@@ -11,7 +11,7 @@ to_matrix <- function(x) {
     dplyr::select(-model, -horizon, -data) %>%
     tidyr::unite(prediction_date, creation_date, value_date) %>%
     tidyr::spread(quantile, value) %>%
-    dplyr::select(-prediction_date) %>%
+    dplyr::select(starts_with("0")) %>%
     as.matrix()
 }
 
