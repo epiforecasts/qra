@@ -13,10 +13,11 @@ qra(
   max_date,
   history,
   pool,
-  intervals,
+  quantiles,
   max_future = Inf,
   per_quantile_weights = FALSE,
-  enforce_normalisation = TRUE
+  enforce_normalisation = TRUE,
+  ...
 )
 }
 \arguments{
@@ -44,20 +45,13 @@ the latest \\code{creation_date} in \\code{forecasts}}
 "horizon", "geography_scale", etc.) indicating columns in the \code{forecasts}
 and \code{data} data frames; by default, will not pool across anything}
 
-\item{intervals}{Numeric - which central intervals to consider; by default will
+\item{quantiles}{Numeric - which quantiles to consider; by default will
 consider the maximum spanning set. Options are determined by data but will be between
 0 and 1.}
 
 \item{max_future}{Numeric - the maximum number of days of forecast to consider}
 
-\item{per_quantile_weights}{if TRUE, separate weights are calculated for
-each quantiles}
-
-\item{enforce_normalisation}{if TRUE, normalisation (weights >0 and sum to
-\enumerate{
-\item is enforced by adding a penalty to the score if the weights are not
-normalised
-}}
+\item{...}{any options for \code{furrr::future_map}, in particular \code{.progress}}
 }
 \value{
 a list of \code{ensemble}, a data frame similar to the input forecast,

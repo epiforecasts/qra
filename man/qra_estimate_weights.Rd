@@ -9,15 +9,6 @@ qra_estimate_weights(x, per_quantile_weights, enforce_normalisation)
 \arguments{
 \item{x}{input data frame containing \code{model}, \code{quantile}, \code{boundary},
 \code{value}, \code{interval} columns.}
-
-\item{per_quantile_weights}{if TRUE, separate weights are calculated for
-each quantiles}
-
-\item{enforce_normalisation}{if TRUE, normalisation (weights >0 and sum to
-\enumerate{
-\item is enforced by adding a penalty to the score if the weights are not
-normalised
-}}
 }
 \value{
 data frame with weights per quantile (which won't vary unless
