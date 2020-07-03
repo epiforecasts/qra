@@ -195,7 +195,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   ## check if only specific quantiles are to be used
   if (!missing(quantiles)) {
     obs_and_pred <- obs_and_pred %>%
-      dplyr::filter(quantile %in% quantile)
+      dplyr::filter(quantile %in% quantiles)
   }
 
   ## require a complete set of forecasts to be include in QRA
