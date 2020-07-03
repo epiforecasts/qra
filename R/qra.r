@@ -1,54 +1,18 @@
-##' Helper function to calculate a weighted average interval score for a set of
-##' model predictions and data and using a given set of weights
+##' Helper function to convert a data frame of forecasts into a list of matrices
 ##'
-##' @param weights weights given to each model, as real vector
-##' @param x input data frame, containing the columns \code{model}, \code{quantile} and
-##' \code{value}
-##' @param enforce_normalisation if TRUE, normalisation (weights >0 and sum to
-##' 1) is enforced by adding a penalty to the score if the weights are not
-##' normalised
-##' @param per_quantile_weights if TRUE, separate weights are calculated for
-##' each quantiles
-##' @importFrom dplyr rowwise summarise ungroup mutate group_by_at vars
-##' @importFrom tidyr expand_grid
-##' @importFrom scoringutils interval_score
-##' @return an average interval score
+##' @param x input data frame
+##' @return list of matrices
+##' @author Sebastian Funk
+##' @importFrom dplyr select
+##' @importFrom tidyr unite spread
 ##' @keywords internal
-qra_weighted_average_interval_score <-
-  function(weights, x, per_quantile_weights) {
-    ## build tibble holding the per-model, (possibly) per-quantile weights
-    models <- unique(x$model)
-    quantiles <-unique(x$quantile)
-    mw <- tidyr::expand_grid(model = models, quantile = quantiles)
-
-    ## set weights
-    if (!per_quantile_weights) {
-      weights <- rep(weights, each = length(quantiles))
-    }
-
-    mw <- mw %>%
-      dplyr::mutate(weight = weights)
-
-    ## join weights with input data frame
-    y <- x %>%
-      dplyr::left_join(mw, by = c("model", "quantile")) %>%
-      dplyr::group_by(quantile) %>%
-      ungroup()
-
-    ## calculate mean score
-    mean_score <- y %>%
-      dplyr::group_by_at(dplyr::vars(-model, -value, -quantile, -weight)) %>%
-      dplyr::summarise(value = sum(value * weight) / sum(weight)) %>%
-      dplyr::ungroup() %>%
-      tidyr::spread(boundary, value) %>%
-      dplyr::rowwise() %>%
-      dplyr::summarise(score = scoringutils::interval_score(data, lower, upper,
-                                       100 * interval, weigh = TRUE)) %>%
-      dplyr::ungroup() %>%
-      .$score %>%
-      mean
-
-  return(mean_score)
+to_matrix <- function(x) {
+  x %>%
+    dplyr::select(-model, -horizon, -data) %>%
+    tidyr::unite(prediction_date, creation_date, value_date) %>%
+    tidyr::spread(quantile, value) %>%
+    dplyr::select(-prediction_date) %>%
+    as.matrix()
 }
 
 ##' Helper function to estimate weights for QRA.
@@ -59,57 +23,58 @@ qra_weighted_average_interval_score <-
 ##' \code{value}, \code{interval} columns.
 ##' @return data frame with weights per quantile (which won't vary unless
 ##' \code{per_quantile_weights} is set to TRUE), per model
-##' @inheritParams qra_weighted_average_interval_score
-##' @importFrom nloptr sbplx
-##' @importFrom dplyr mutate
-##' @importFrom tidyr expand_grid
+##' @importFrom quantgen combine_into_array quantile_ensemble
+##' @importFrom dplyr mutate select distinct group_split 
+##' @importFrom tidyr expand_grid unite
 ##' @keywords internal
 qra_estimate_weights <-
   function(x, per_quantile_weights, enforce_normalisation) {
 
-  ## change x to only have present models
-  x <- x %>%
-    mutate(model = factor(x$model))
-  ## number of models
-  nmodels <- length(unique(x$model))
-  init_weight <- 1 / nmodels
-  ## number of quantiles
-  nquant <- length(unique(x$quantile))
+    sorted <- x %>%
+      arrange(model, quantile)
 
-  if (per_quantile_weights) {
-    nweights <- nmodels * nquant
-  } else {
-    nweights <- nmodels
-  }
+    pred_matrices <- sorted %>%
+      dplyr::group_split(model) %>%
+      lapply(to_matrix) %>%
+      quantgen::combine_into_array()
 
-  ## initial weights
-  init_weights <- rep(init_weight, nweights)
-  ## set up optimisation
-  slsqp_opts <-
-    list(x0 = init_weights, fn = qra_weighted_average_interval_score,
-         x = x, per_quantile_weights = per_quantile_weights)
-  if (enforce_normalisation) {
-    slsqp_opts[["lower"]] <- rep(0, length(init_weights))
-    slsqp_opts[["upper"]] <- rep(1, length(init_weights))
-    heq <- function(x) sum(x) - 1
-    slsqp_opts[["heq"]] <- heq
-    slsqp_opts[["heqjac"]] <- function(x) nl.jacobian(x, heq)
-  }
-  res <- do.call(nloptr::slsqp, slsqp_opts)
+    data <- x %>%
+      tidyr::unite(prediction_date, creation_date, value_date) %>%
+      dplyr::select(prediction_date, data) %>%
+      dplyr::distinct() %>%
+      .$data
 
-  ## retrieve weights from optimisation
-  if (per_quantile_weights) {
-    weights <- res$par
-  } else {
-    weights <- rep(res$par, each = nquant)
-  }
+    tau <- x %>%
+      dplyr::select(quantile) %>%
+      dplyr::distinct() %>%
+      dplyr::arrange(quantile) %>%
+      .$quantile
 
-  ## create return tibble
-  ret <- tidyr::expand_grid(model = unique(x$model),
-                            quantile = unique(x$quantile)) %>%
-    dplyr::mutate(weight = weights)
+    if (per_quantile_weights) {
+      tau_groups <- seq_along(tau)
+    } else {
+      tau_groups <- rep(1, length(tau))
+    }
 
-  return(ret)
+    qe <-
+      quantgen::quantile_ensemble(pred_matrices, data, tau, lp_solver = "glpk",
+                                  tau_groups = tau_groups,
+                                  nonneg = enforce_normalisation,
+                                  unit_sum = enforce_normalisation)
+
+    ## retrieve weights from optimisation
+    if (per_quantile_weights) {
+      weights <- qe$alpha
+    } else {
+      weights <- rep(qe$alpha, each = length(unique(x$quantile)))
+    }
+
+    ## create return tibble
+    ret <- tidyr::expand_grid(model = unique(sort(x$model)),
+                              quantile = unique(x$quantile)) %>%
+      dplyr::mutate(weight = weights)
+
+    return(ret)
 }
 
 ##' @name qra
@@ -130,7 +95,7 @@ qra_estimate_weights <-
 ##' @param pool any columns to pool as a list of character vectors (e.g.,
 ##' "horizon", "geography_scale", etc.) indicating columns in the \code{forecasts}
 ##' and \code{data} data frames; by default, will not pool across anything
-##' @param intervals Numeric - which central intervals to consider; by default will
+##' @param quantiles Numeric - which quantiles to consider; by default will
 ##' consider the maximum spanning set. Options are determined by data but will be between
 ##' 0 and 1.
 ##' @param max_future Numeric - the maximum number of days of forecast to consider
@@ -142,13 +107,13 @@ qra_estimate_weights <-
 ##' @importFrom tidyselect all_of
 ##' @importFrom future plan multiprocess
 ##' @importFrom furrr future_map
-##' @inheritParams qra_weighted_average_interval_score
+##' @inheritParams qra_estimate_weights
 ##' @return a list of \code{ensemble}, a data frame similar to the input forecast,
 ##' but with \\code{model} set to "Quantile regression average" and the values
 ##' set to the weighted averages; and \code{weights}, a data frame giving the weights
 ##' @export
 qra <- function(forecasts, data, target_date, min_date, max_date, history,
-                pool, intervals, max_future = Inf,
+                pool, quantiles, max_future = Inf,
                 per_quantile_weights = FALSE, enforce_normalisation = TRUE,
                 ...) {
 
@@ -193,13 +158,12 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   ## training below
   grouping_vars <-
     setdiff(colnames(obs_and_pred),
-            c("value_date", "value", "model", "data",
-              "quantile", "boundary", "interval", pool))
+            c("creation_date", "value_date", "value", "model", "data", "quantile", pool))
   pooling_vars <-
-    c("creation_date", "model", pool)
+    c("model", "creation_date", pool)
 
   present_models <- latest_forecasts %>%
-    dplyr::select_at(tidyselect::all_of(c("model", grouping_vars))) %>%
+    dplyr::select_at(tidyselect::all_of(c("model", "creation_date", grouping_vars))) %>%
     select(-creation_date) %>%
     distinct()
 
@@ -228,33 +192,17 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     ## join data
     dplyr::inner_join(data,
                by = setdiff(colnames(data), c("value"))) %>%
-    dplyr::rename(value = value.x, data = value.y) %>%
-    ## work out intervals and boundaries
-    dplyr::mutate(interval = round(2 * abs(quantile - 0.5), 2),
-                  boundary =
-                    dplyr::if_else(quantile < 0.5, "lower", "upper"))
+    dplyr::rename(value = value.x, data = value.y)
 
-  ## check if only specific intervals are to be used
-  if (!missing(intervals)) {
+  ## check if only specific quantiles are to be used
+  if (!missing(quantiles)) {
     obs_and_pred <- obs_and_pred %>%
-      dplyr::filter(interval %in% intervals)
+      dplyr::filter(quantile %in% quantile)
   }
 
-  ## duplicated median (quantila == 0.5) as it's both the lower and upper bound
-  ## of the corresponding interval
-  alpha_lower <- obs_and_pred %>%
-    dplyr::filter(quantile == 0.5) %>%
-    dplyr::mutate(boundary = "lower")
-
-  obs_and_pred_double_alpha <- obs_and_pred %>%
-    dplyr::bind_rows(alpha_lower) %>%
-    select(-value_date)
-
   ## require a complete set of forecasts to be include in QRA
-  complete_set <- obs_and_pred_double_alpha %>%
-    dplyr::group_by_at(
-             tidyselect::all_of(
-                           c(grouping_vars, "interval"))) %>%
+  complete_set <- obs_and_pred %>%
+    dplyr::group_by_at(tidyselect::all_of(c(grouping_vars))) %>%
     ## create complete tibble of all combinations of creation date, model
     ## and pooling variables
     tidyr::complete(!!!syms(pooling_vars)) %>%
@@ -274,7 +222,8 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     dplyr::mutate(weights =
                     furrr::future_map(test_data, qra_estimate_weights,
                                       per_quantile_weights, enforce_normalisation,
-                                      ...)) %>%
+                                      ...),
+                  .progress = TRUE) %>%
     tidyr::unnest(weights) %>%
     dplyr::select(-test_data)
 
