@@ -188,7 +188,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     dplyr::filter(horizon <= max_horizon) %>%
     dplyr::select(-max_horizon) %>%
     ## join data
-    dplyr::inner_join(data,
+    dplyr::left_join(data,
                by = setdiff(colnames(data), c("value"))) %>%
     dplyr::rename(value = value.x, data = value.y)
 
@@ -214,6 +214,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
 
   ## perform QRA
   weights <- complete_set %>%
+    filter(!is.na(data)) %>%
     tidyr::nest(test_data = c(-setdiff(grouping_vars, "creation_date"))) %>%
     dplyr::mutate(weights =
                     purrr::map(test_data, qra_estimate_weights,
