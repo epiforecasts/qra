@@ -161,9 +161,8 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     c("model", "creation_date", pool)
 
   present_models <- latest_forecasts %>%
-    dplyr::select_at(tidyselect::all_of(c("model", "creation_date", grouping_vars))) %>%
-    select(-creation_date) %>%
-    distinct()
+    dplyr::select_at(tidyselect::all_of(c("model", grouping_vars))) %>%
+    dplyr::distinct()
 
   ## create training data set
   obs_and_pred <- obs_and_pred %>%
