@@ -57,7 +57,7 @@ qra_estimate_weights <-
     }
 
     qe <-
-      quantgen::quantile_ensemble(pred_matrices, data, tau, lp_solver = "glpk",
+      quantgen::quantile_ensemble(pred_matrices, data, tau,
                                   tau_groups = tau_groups,
                                   nonneg = enforce_normalisation,
                                   unit_sum = enforce_normalisation, time_limit = 60)
