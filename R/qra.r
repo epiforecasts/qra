@@ -176,15 +176,16 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   max_horizons <- obs_and_pred %>%
     filter(horizon <= max_future) %>%
     dplyr::group_by_at(
-             tidyselect::all_of(c(setdiff(grouping_vars, "horizon"), "model"))) %>%
+             tidyselect::all_of(c(setdiff(grouping_vars, "horizon"),
+                                  "creation_date", "model"))) %>%
     dplyr::mutate(max_horizon = max(horizon)) %>%
-    dplyr::group_by_at(tidyselect::all_of(c(grouping_vars))) %>%
+    dplyr::group_by_at(tidyselect::all_of(c(grouping_vars, "creation_date"))) %>%
     dplyr::summarise(max_horizon = min(max_horizon)) %>%
     dplyr::ungroup()
 
   obs_and_pred <- obs_and_pred %>%
     ## filter <= max horizon
-    dplyr::left_join(max_horizons, by = grouping_vars) %>%
+    dplyr::left_join(max_horizons, by = c(grouping_vars, "creation_date")) %>%
     dplyr::filter(horizon <= max_horizon) %>%
     dplyr::select(-max_horizon) %>%
     ## join data
@@ -200,7 +201,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
 
   ## require a complete set of forecasts to be include in QRA
   complete_set <- obs_and_pred %>%
-    dplyr::group_by_at(tidyselect::all_of(c(grouping_vars))) %>%
+    dplyr::group_by_at(tidyselect::all_of(c(grouping_vars, "horizon"))) %>%
     ## create complete tibble of all combinations of creation date, model
     ## and pooling variables
     tidyr::complete(!!!syms(pooling_vars)) %>%
@@ -243,17 +244,10 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
       dplyr::ungroup() %>%
       ## give model a name
       dplyr::mutate(model = "Quantile regression average")
-
-    weights_ret <- weights %>%
-      dplyr::arrange(quantile) %>%
-      dplyr::mutate(quantile =
-                      paste0("percentile_", sprintf("%.2f", quantile))) %>%
-      tidyr::spread(quantile, weight)
   } else {
     ensemble <- latest_forecasts %>%
       filter(FALSE)
-    weights_ret <- NULL
   }
 
-  return(list(ensemble = ensemble, weights = weights_ret))
+  return(list(ensemble = ensemble, weights = weights))
 }
