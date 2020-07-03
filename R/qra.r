@@ -60,7 +60,7 @@ qra_estimate_weights <-
       quantgen::quantile_ensemble(pred_matrices, data, tau, lp_solver = "glpk",
                                   tau_groups = tau_groups,
                                   nonneg = enforce_normalisation,
-                                  unit_sum = enforce_normalisation)
+                                  unit_sum = enforce_normalisation, time_limit = 60)
 
     ## retrieve weights from optimisation
     if (per_quantile_weights) {
@@ -99,14 +99,12 @@ qra_estimate_weights <-
 ##' consider the maximum spanning set. Options are determined by data but will be between
 ##' 0 and 1.
 ##' @param max_future Numeric - the maximum number of days of forecast to consider
-##' @param ... any options for \code{furrr::future_map}, in particular \code{.progress}
 ##' @importFrom dplyr filter arrange desc inner_join mutate rename select bind_rows group_by_at starts_with
 ##' @importFrom tidyr gather complete nest spread
 ##' @importFrom rlang !!! syms
 ##' @importFrom readr parse_number
 ##' @importFrom tidyselect all_of
-##' @importFrom future plan multiprocess
-##' @importFrom furrr future_map
+##' @importFrom purrr map
 ##' @inheritParams qra_estimate_weights
 ##' @return a list of \code{ensemble}, a data frame similar to the input forecast,
 ##' but with \\code{model} set to "Quantile regression average" and the values
@@ -214,13 +212,11 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     dplyr::select(-any_na) %>%
     ungroup()
 
-  future::plan(future::multiprocess)
-
   ## perform QRA
   weights <- complete_set %>%
     tidyr::nest(test_data = c(-setdiff(grouping_vars, "creation_date"))) %>%
     dplyr::mutate(weights =
-                    furrr::future_map(test_data, qra_estimate_weights,
+                    purrr::map(test_data, qra_estimate_weights,
                                       per_quantile_weights, enforce_normalisation,
                                       ...)) %>%
     tidyr::unnest(weights) %>%
