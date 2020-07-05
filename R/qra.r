@@ -64,7 +64,7 @@ qra_estimate_weights <-
 
     ## retrieve weights from optimisation
     if (per_quantile_weights) {
-      weights <- qe$alpha
+      weights <- c(t(qe$alpha))
     } else {
       weights <- rep(qe$alpha, each = length(unique(x$quantile)))
     }
