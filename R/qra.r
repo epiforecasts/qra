@@ -56,18 +56,23 @@ qra_estimate_weights <-
       tau_groups <- rep(1, length(tau))
     }
 
-    qe <-
-      quantgen::quantile_ensemble(pred_matrices, data, tau,
-                                  tau_groups = tau_groups,
-                                  nonneg = enforce_normalisation,
-                                  unit_sum = enforce_normalisation, time_limit = 60)
-
-    ## retrieve weights from optimisation
-    if (per_quantile_weights) {
-      weights <- c(t(qe$alpha))
-    } else {
-      weights <- rep(qe$alpha, each = length(unique(x$quantile)))
-    }
+    weights <- tryCatch({
+      qe <-
+        quantgen::quantile_ensemble(pred_matrices, data, tau,
+                                    tau_groups = tau_groups,
+                                    nonneg = enforce_normalisation,
+                                    unit_sum = enforce_normalisation, 
+    				    time_limit = 60)
+      ## retrieve weights from optimisation
+      if (per_quantile_weights) {
+        c(t(qe$alpha))
+      } else {
+        rep(qe$alpha, each = length(unique(x$quantile)))
+      }
+    }, error = function(e) {
+      warning("Optimisation failed, using equal weights.")
+      rep(1 / length(unique(x$model)), length(unique(x$model)) * length(unique(x$quantile)))
+    })
 
     ## create return tibble
     ret <- tidyr::expand_grid(model = unique(sort(x$model)),
