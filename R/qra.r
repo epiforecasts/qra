@@ -28,7 +28,7 @@ to_matrix <- function(x) {
 ##' @importFrom tidyr expand_grid unite
 ##' @keywords internal
 qra_estimate_weights <-
-  function(x, per_quantile_weights, enforce_normalisation) {
+  function(x, per_quantile_weights, enforce_normalisation, ...) {
 
     sorted <- x %>%
       arrange(model, quantile)
@@ -62,7 +62,7 @@ qra_estimate_weights <-
                                     tau_groups = tau_groups,
                                     nonneg = enforce_normalisation,
                                     unit_sum = enforce_normalisation, 
-    				    time_limit = 60)
+    				    time_limit = 60, ...)
       ## retrieve weights from optimisation
       if (per_quantile_weights) {
         c(t(qe$alpha))
