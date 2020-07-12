@@ -8,7 +8,7 @@
 ##' @keywords internal
 to_matrix <- function(x) {
   x %>%
-    dplyr::select(-model, -horizon, -data) %>%
+    dplyr::select(-model, -horizon) %>%
     tidyr::unite(prediction_date, creation_date, value_date) %>%
     tidyr::spread(quantile, value) %>%
     dplyr::select(starts_with("0")) %>%
@@ -30,24 +30,21 @@ to_matrix <- function(x) {
 qra_estimate_weights <-
   function(x, per_quantile_weights, enforce_normalisation, ...) {
 
-    sorted <- x %>%
-      arrange(model, quantile)
-
-    pred_matrices <- sorted %>%
+    pred_matrices <- x %>%
+      dplyr::select(-data) %>%
       dplyr::group_split(model) %>%
       lapply(to_matrix) %>%
       quantgen::combine_into_array()
 
     data <- x %>%
       tidyr::unite(prediction_date, creation_date, value_date) %>%
-      dplyr::select(prediction_date, data) %>%
-      dplyr::distinct() %>%
+      dplyr::group_by_at(dplyr::vars(-model, -horizon, -quantile, -value, -data)) %>%
+      dplyr::summarise(data = unique(data)) %>%
       .$data
 
     tau <- x %>%
       dplyr::select(quantile) %>%
       dplyr::distinct() %>%
-      dplyr::arrange(quantile) %>%
       .$quantile
 
     if (per_quantile_weights) {
@@ -56,30 +53,26 @@ qra_estimate_weights <-
       tau_groups <- rep(1, length(tau))
     }
 
-    weights <- tryCatch({
-      qe <-
-        quantgen::quantile_ensemble(pred_matrices, data, tau,
-                                    tau_groups = tau_groups,
-                                    nonneg = enforce_normalisation,
-                                    unit_sum = enforce_normalisation, 
-    				    time_limit = 60, ...)
-      ## retrieve weights from optimisation
-      if (per_quantile_weights) {
-        c(t(qe$alpha))
-      } else {
-        rep(qe$alpha, each = length(unique(x$quantile)))
-      }
-    }, error = function(e) {
-      warning("Optimisation failed, using equal weights.")
-      rep(1 / length(unique(x$model)), length(unique(x$model)) * length(unique(x$quantile)))
-    })
+    qe <-
+      quantgen::quantile_ensemble(pred_matrices, data, tau,
+                                  tau_groups = tau_groups,
+                                  nonneg = enforce_normalisation,
+                                  unit_sum = enforce_normalisation, 
+                                  time_limit = 60, ...)
+
+    ## retrieve weights from optimisation
+    if (per_quantile_weights) {
+      weights <- c(t(qe$alpha))
+    } else {
+      weights <- rep(qe$alpha, each = length(unique(x$quantile)))
+    }
 
     ## create return tibble
     ret <- tidyr::expand_grid(model = unique(sort(x$model)),
                               quantile = unique(x$quantile)) %>%
       dplyr::mutate(weight = weights)
 
-    return(ret)
+    return(tibble(weights = list(ret), res = list(qe)))
 }
 
 ##' @name qra
@@ -129,6 +122,9 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     stop("If 'history' is given and > 0, 'min_date' and 'max_date' can't be." )
   }
 
+  forecasts <- forecasts %>%
+    dplyr::arrange(dplyr::desc(creation_date), model, quantile)
+
   ## data frame with the forecasts that are being combined
   latest_forecasts <- forecasts %>%
     dplyr::filter(creation_date == target_date)
@@ -136,7 +132,6 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   ## prepare data frame containing data and predictions
   obs_and_pred <- forecasts %>%
     dplyr::filter(creation_date < target_date) %>%
-    dplyr::arrange(dplyr::desc(creation_date)) %>%
     dplyr::mutate(horizon = value_date - creation_date)
 
   creation_dates <- unique(obs_and_pred$creation_date)
@@ -218,18 +213,22 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     ungroup()
 
   ## perform QRA
-  weights <- complete_set %>%
+  ensemble <- complete_set %>%
     filter(!is.na(data)) %>%
     tidyr::nest(test_data = c(-setdiff(grouping_vars, "creation_date"))) %>%
     dplyr::mutate(weights =
                     purrr::map(test_data, qra_estimate_weights,
                                       per_quantile_weights, enforce_normalisation,
-                                      ...)) %>%
+                               ...)) %>%
     tidyr::unnest(weights) %>%
-    dplyr::select(-test_data)
+    select(-test_data)
+
+  weights <- ensemble %>%
+    dplyr::select(-res) %>%
+    tidyr::unnest(weights)
 
   if (nrow(weights) > 0) {
-    ensemble <- latest_forecasts %>%
+    pred <- latest_forecasts %>%
       mutate(creation_date = target_date) %>%
       ## only keep value dates which have all models present
       dplyr::group_by_at(
@@ -250,9 +249,9 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
       ## give model a name
       dplyr::mutate(model = "Quantile regression average")
   } else {
-    ensemble <- latest_forecasts %>%
+    pred <- latest_forecasts %>%
       filter(FALSE)
   }
 
-  return(list(ensemble = ensemble, weights = weights))
+  return(list(ensemble = pred, weights = weights))
 }
