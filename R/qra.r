@@ -20,7 +20,7 @@ to_matrix <- function(x) {
 ##' @param preds predictions
 ##' @param qra_res QRA result
 ##' @return tibble
-qra_create_ensemble <- function(preds, qra_res) {
+qra_create_ensemble <- function(preds, qra_res, ...) {
   pred_matrices <- preds %>%
     dplyr::select(-weight) %>%
     dplyr::group_split(model) %>%
@@ -50,7 +50,7 @@ qra_create_ensemble <- function(preds, qra_res) {
 ##' @importFrom tidyr expand_grid unite
 ##' @keywords internal
 qra_estimate_weights <-
-  function(x, per_quantile_weights, enforce_normalisation, ...) {
+  function(x, per_quantile_weights, enforce_normalisation) {
 
     pred_matrices <- x %>%
       dplyr::select(-data, -horizon) %>%
@@ -80,8 +80,7 @@ qra_estimate_weights <-
                                   tau_groups = tau_groups,
                                   nonneg = enforce_normalisation,
                                   unit_sum = enforce_normalisation, 
-                                  time_limit = 60, ...)
-
+                                  time_limit = 60)
     ## retrieve weights from optimisation
     if (per_quantile_weights) {
       weights <- c(t(qe$alpha))
@@ -241,17 +240,16 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     ungroup()
 
   ## perform QRA
-  ensemble <- complete_set %>%
+  if (nrow(complete_set) > 0) {
+    ensemble <- complete_set %>%
     filter(!is.na(data)) %>%
     tidyr::nest(test_data = c(-setdiff(grouping_vars, "creation_date"))) %>%
     dplyr::mutate(weights =
                     purrr::map(test_data, qra_estimate_weights,
-                                      per_quantile_weights, enforce_normalisation,
-                               ...)) %>%
+                                      per_quantile_weights, enforce_normalisation)) %>%
     tidyr::unnest(weights) %>%
     select(-test_data)
 
-  if (nrow(ensemble) > 0) {
     weights <- ensemble %>%
       dplyr::select(-res) %>%
       tidyr::unnest(weights)
@@ -272,7 +270,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
       tidyr::nest(predictions = c(-setdiff(grouping_vars, "creation_date"))) %>%
       dplyr::inner_join(ensemble %>% dplyr::select(-weights),
                         by = c(setdiff(grouping_vars, "creation_date"))) %>%
-      dplyr::mutate(values = purrr::map2(predictions, res, qra_create_ensemble)) %>%
+      dplyr::mutate(values = purrr::map2(predictions, res, qra_create_ensemble, ...)) %>%
       select(-predictions, -res) %>%
       tidyr::unnest(values) %>%
       ## give model a name
