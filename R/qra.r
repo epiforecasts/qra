@@ -182,7 +182,20 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   pooling_vars <-
     c("model", "creation_date", pool)
 
-  present_models <- latest_forecasts %>%
+  latest_checked <- latest_forecasts %>%
+    dplyr::group_by_at(tidyselect::all_of(grouping_vars)) %>%
+    ## create complete tibble of all combinations of creation date, model
+    ## and pooling variables
+    tidyr::complete(!!!syms(setdiff(pooling_vars, "horizon"))) %>%
+    ## check if anything is missing and filter out
+    dplyr::group_by_at(
+             tidyselect::all_of(c(grouping_vars, "model"))) %>%
+    dplyr::mutate(any_na = any(is.na(value))) %>%
+    dplyr::filter(!any_na) %>%
+    dplyr::select(-any_na)
+
+  present_models <- latest_checked %>%
+    ## check present models
     dplyr::select_at(tidyselect::all_of(c("model", grouping_vars))) %>%
     dplyr::distinct()
 
@@ -256,7 +269,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
       dplyr::select(-res) %>%
       tidyr::unnest(weights)
 
-    pred <- latest_forecasts %>%
+    pred <- latest_checked %>%
       mutate(creation_date = target_date) %>%
       ## only keep value dates which have all models present
       dplyr::group_by_at(
