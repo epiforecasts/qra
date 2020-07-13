@@ -8,16 +8,37 @@
 ##' @keywords internal
 to_matrix <- function(x) {
   x %>%
-    dplyr::select(-model, -horizon) %>%
+    dplyr::select(-model) %>%
     tidyr::unite(prediction_date, creation_date, value_date) %>%
     tidyr::spread(quantile, value) %>%
     dplyr::select(starts_with("0")) %>%
     as.matrix()
 }
 
-##' Helper function to estimate weights for QRA.
+##' Helper function to create a QRA ensemble
 ##'
-##' for a data frame
+##' @param preds predictions
+##' @param qra_res QRA result
+##' @return tibble
+qra_create_ensemble <- function(preds, qra_res) {
+  pred_matrices <- preds %>%
+    dplyr::group_split(model) %>%
+    lapply(to_matrix) %>%
+    quantgen::combine_into_array()
+
+  values <- predict(qra_res, pred_matrices)
+  colnames(values) <- unique(preds$quantile)
+
+  res <- preds %>%
+    select(-model, -quantile, -weight, -value) %>%
+    distinct() %>%
+    cbind(as_tibble(values)) %>%
+    tidyr::gather(quantile, value, matches("^0"))
+
+  return(res)
+}
+
+##' Helper function to estimate weights for QRA.
 ##'
 ##' @param x input data frame containing \code{model}, \code{quantile}, \code{boundary},
 ##' \code{value}, \code{interval} columns.
@@ -31,7 +52,7 @@ qra_estimate_weights <-
   function(x, per_quantile_weights, enforce_normalisation, ...) {
 
     pred_matrices <- x %>%
-      dplyr::select(-data) %>%
+      dplyr::select(-data, -horizon) %>%
       dplyr::group_split(model) %>%
       lapply(to_matrix) %>%
       quantgen::combine_into_array()
@@ -238,14 +259,15 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
       dplyr::filter(n == max(n)) %>%
       dplyr::select(-n) %>%
       ## join weights
-      dplyr::mutate(horizon = value_date - creation_date) %>%
       dplyr::inner_join(weights, by = c(setdiff(grouping_vars, "creation_date"),
                                         "model", "quantile")) %>%
-      dplyr::select(-horizon) %>%
       ## weigh quantiles
-      dplyr::group_by_at(dplyr::vars(-model, -weight, -value)) %>%
-      dplyr::summarise(value = sum(weight * value, na.rm = TRUE)) %>%
-      dplyr::ungroup() %>%
+      tidyr::nest(predictions = c(-setdiff(grouping_vars, "creation_date"))) %>%
+      dplyr::inner_join(ensemble %>% dplyr::select(-weights),
+                        by = c(setdiff(grouping_vars, "creation_date"))) %>%
+      dplyr::mutate(values = purrr::map2(predictions, res, qra_create_ensemble)) %>%
+      select(-predictions, -res) %>%
+      tidyr::unnest(values) %>%
       ## give model a name
       dplyr::mutate(model = "Quantile regression average")
   } else {
