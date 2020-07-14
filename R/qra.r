@@ -34,7 +34,8 @@ qra_create_ensemble <- function(preds, qra_res, ...) {
     select(-model, -quantile, -weight, -value) %>%
     distinct() %>%
     cbind(as_tibble(values)) %>%
-    tidyr::gather(quantile, value, matches("^0"))
+    tidyr::gather(quantile, value, matches("^0")) %>%
+    mutate(quantile = as.numeric(quantile))
 
   return(res)
 }
@@ -276,6 +277,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
       dplyr::group_by_at(tidyselect::all_of(grouping_vars)) %>%
       dplyr::filter(n == max(n)) %>%
       dplyr::select(-n) %>%
+      dplyr::ungroup() %>%
       ## join weights
       dplyr::inner_join(weights, by = c(setdiff(grouping_vars, "creation_date"),
                                         "model", "quantile")) %>%
