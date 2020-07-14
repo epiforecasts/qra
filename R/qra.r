@@ -27,7 +27,7 @@ qra_create_ensemble <- function(preds, qra_res, ...) {
     lapply(to_matrix) %>%
     quantgen::combine_into_array()
 
-  values <- predict(qra_res, pred_matrices)
+  values <- predict(qra_res, pred_matrices, ...)
   colnames(values) <- unique(preds$quantile)
 
   res <- preds %>%
