@@ -194,6 +194,10 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     dplyr::filter(!any_na) %>%
     dplyr::select(-any_na)
 
+  if (nrow(latest_checked) == 0) {
+    return(list(weights = NULL, ensemble = NULL))
+  }
+
   present_models <- latest_checked %>%
     ## check present models
     dplyr::select_at(tidyselect::all_of(c("model", grouping_vars))) %>%
