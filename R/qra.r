@@ -20,14 +20,14 @@ to_matrix <- function(x) {
 ##' @param preds predictions
 ##' @param qra_res QRA result
 ##' @return tibble
-qra_create_ensemble <- function(preds, qra_res, ...) {
+qra_create_ensemble <- function(preds, qra_res, iso = FALSE) {
   pred_matrices <- preds %>%
     dplyr::select(-weight) %>%
     dplyr::group_split(model) %>%
     lapply(to_matrix) %>%
     quantgen::combine_into_array()
 
-  values <- predict(qra_res, pred_matrices, ...)
+  values <- predict(qra_res, pred_matrices, iso = iso)
   colnames(values) <- unique(preds$quantile)
 
   res <- preds %>%
@@ -47,11 +47,11 @@ qra_create_ensemble <- function(preds, qra_res, ...) {
 ##' @return data frame with weights per quantile (which won't vary unless
 ##' \code{per_quantile_weights} is set to TRUE), per model
 ##' @importFrom quantgen combine_into_array quantile_ensemble
-##' @importFrom dplyr mutate select distinct group_split 
+##' @importFrom dplyr mutate select distinct group_split
 ##' @importFrom tidyr expand_grid unite
 ##' @keywords internal
 qra_estimate_weights <-
-  function(x, per_quantile_weights, enforce_normalisation) {
+  function(x, per_quantile_weights, intercept, ...) {
 
     pred_matrices <- x %>%
       dplyr::select(-data, -horizon) %>%
@@ -80,11 +80,14 @@ qra_estimate_weights <-
       quantgen::quantile_ensemble(pred_matrices, data, tau,
                                   tau_groups = tau_groups,
                                   nonneg = enforce_normalisation,
-                                  unit_sum = enforce_normalisation, 
-                                  time_limit = 60)
+                                  unit_sum = enforce_normalisation,
+                                  time_limit = 60,
+                                  ...)
     ## retrieve weights from optimisation
     if (per_quantile_weights) {
       weights <- c(t(qe$alpha))
+    } else if (intercept) {
+      weights <- rep(qe$alpha[-1], each = length(unique(x$quantile)))
     } else {
       weights <- rep(qe$alpha, each = length(unique(x$quantile)))
     }
@@ -133,7 +136,7 @@ qra_estimate_weights <-
 qra <- function(forecasts, data, target_date, min_date, max_date, history,
                 pool, quantiles, max_future = Inf,
                 per_quantile_weights = FALSE, enforce_normalisation = TRUE,
-                ...) {
+                intercept = FALSE, ...) {
 
   ## set target date to last forecast date if missing
   if (missing(target_date)) {target_date <- max(forecasts$creation_date)}
@@ -264,7 +267,9 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     tidyr::nest(test_data = c(-setdiff(grouping_vars, "creation_date"))) %>%
     dplyr::mutate(weights =
                     purrr::map(test_data, qra_estimate_weights,
-                                      per_quantile_weights, enforce_normalisation)) %>%
+                               per_quantile_weights = per_quantile_weights,
+                               enforce_normalisation = enforce_normalisation,
+                               intercept = intercept)) %>%
     tidyr::unnest(weights) %>%
     select(-test_data)
 
