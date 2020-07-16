@@ -81,6 +81,7 @@ qra_estimate_weights <-
                                   tau_groups = tau_groups,
                                   nonneg = enforce_normalisation,
                                   unit_sum = enforce_normalisation,
+                                  intercept = intercept,
                                   time_limit = 60,
                                   ...)
     ## retrieve weights from optimisation
