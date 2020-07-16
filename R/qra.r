@@ -268,32 +268,38 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     tidyr::unnest(weights) %>%
     select(-test_data)
 
-    weights <- ensemble %>%
-      dplyr::select(-res) %>%
-      tidyr::unnest(weights)
+    if (nrow(ensemble) > 0) {
 
-    pred <- latest_checked %>%
-      mutate(creation_date = target_date) %>%
-      ## only keep value dates which have all models present
-      dplyr::group_by_at(
-               tidyselect::all_of(c(grouping_vars, "value_date", "quantile"))) %>%
-      dplyr::mutate(n = n()) %>%
-      dplyr::group_by_at(tidyselect::all_of(grouping_vars)) %>%
-      dplyr::filter(n == max(n)) %>%
-      dplyr::select(-n) %>%
-      dplyr::ungroup() %>%
-      ## join weights
-      dplyr::inner_join(weights, by = c(setdiff(grouping_vars, "creation_date"),
-                                        "model", "quantile")) %>%
-      ## weigh quantiles
-      tidyr::nest(predictions = c(-setdiff(grouping_vars, "creation_date"))) %>%
-      dplyr::inner_join(ensemble %>% dplyr::select(-weights),
-                        by = c(setdiff(grouping_vars, "creation_date"))) %>%
-      dplyr::mutate(values = purrr::map2(predictions, res, qra_create_ensemble, ...)) %>%
-      select(-predictions, -res) %>%
-      tidyr::unnest(values) %>%
-      ## give model a name
-      dplyr::mutate(model = "Quantile regression average")
+      weights <- ensemble %>%
+        dplyr::select(-res) %>%
+        tidyr::unnest(weights)
+
+      pred <- latest_checked %>%
+        mutate(creation_date = target_date) %>%
+        ## only keep value dates which have all models present
+        dplyr::group_by_at(
+                 tidyselect::all_of(c(grouping_vars, "value_date", "quantile"))) %>%
+        dplyr::mutate(n = n()) %>%
+        dplyr::group_by_at(tidyselect::all_of(grouping_vars)) %>%
+        dplyr::filter(n == max(n)) %>%
+        dplyr::select(-n) %>%
+        dplyr::ungroup() %>%
+        ## join weights
+        dplyr::inner_join(weights, by = c(setdiff(grouping_vars, "creation_date"),
+                                          "model", "quantile")) %>%
+        ## weigh quantiles
+        tidyr::nest(predictions = c(-setdiff(grouping_vars, "creation_date"))) %>%
+        dplyr::inner_join(ensemble %>% dplyr::select(-weights),
+                          by = c(setdiff(grouping_vars, "creation_date"))) %>%
+        dplyr::mutate(values = purrr::map2(predictions, res, qra_create_ensemble, ...)) %>%
+        select(-predictions, -res) %>%
+        tidyr::unnest(values) %>%
+        ## give model a name
+        dplyr::mutate(model = "Quantile regression average")
+    } else {
+      weights <- NULL
+      pred <- NULL
+    }
   } else {
     weights <- NULL
     pred <- NULL
