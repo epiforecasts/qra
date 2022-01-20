@@ -51,17 +51,20 @@ qra_create_ensemble <- function(preds, qra_res, iso = FALSE) {
 ##' @importFrom tidyr expand_grid unite
 ##' @keywords internal
 qra_estimate_weights <-
-  function(x, per_quantile_weights, intercept, ...) {
+  function(x, per_quantile_weights, intercept,
+           enforce_normalisation = FALSE, ...) {
 
     pred_matrices <- x %>%
-      dplyr::select(-data, -horizon) %>%
+      dplyr::select(-data)
+
+    pred_matrices <- pred_matrices %>%
       dplyr::group_split(model) %>%
       lapply(to_matrix) %>%
       quantgen::combine_into_array()
 
     data <- x %>%
       tidyr::unite(prediction_date, creation_date, value_date) %>%
-      dplyr::group_by_at(dplyr::vars(-model, -horizon, -quantile, -value, -data)) %>%
+      dplyr::group_by_at(dplyr::vars(-model, -quantile, -value, -data)) %>%
       dplyr::summarise(data = unique(data)) %>%
       .$data
 
@@ -149,6 +152,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   }
 
   forecasts <- forecasts %>%
+    dplyr::mutate(horizon = as.integer(value_date - creation_date)) %>%
     dplyr::arrange(dplyr::desc(creation_date), model, quantile)
 
   ## data frame with the forecasts that are being combined
@@ -157,8 +161,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
 
   ## prepare data frame containing data and predictions
   obs_and_pred <- forecasts %>%
-    dplyr::filter(creation_date < target_date) %>%
-    dplyr::mutate(horizon = value_date - creation_date)
+    dplyr::filter(creation_date < target_date)
 
   creation_dates <- unique(obs_and_pred$creation_date)
 
@@ -174,7 +177,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
       creation_dates <-
         creation_dates[seq_len(history)]
     } else {
-      creation_dates <- c()
+      return(list(weights = NULL, ensemble = NULL))
     }
   }
 
