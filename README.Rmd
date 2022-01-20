@@ -57,7 +57,7 @@ flist <- lapply(seq_along(mean), function(x) {
                     qnbinom(quantile_levels, size = 1/k[x], mu = mean[x]),
                     paste0("quantile_", quantile_levels)))))) %>%
     tidyr::unnest(quantiles) %>%
-    tidyr::gather(quantile, value, starts_with("quantile_")) %>%
+    tidyr::pivot_longer(names_to = "quantile", starts_with("quantile_")) %>%
     dplyr::mutate(quantile = readr::parse_number(quantile))
 })
 
@@ -81,6 +81,8 @@ data <- df %>%
 Forecasts are pooled by forecast horizon and geography, use last <14 days of
 forecasts for optimising the weights.
 ```{r}
-res <- qra::qra(forecasts, data, pool = c("horizon", "geography"),
+res <- qra::qra(forecasts %>%
+                filter(model == "model 1"),
+                data, pool = c("horizon", "geography"),
                 min_date = max(forecasts$creation_date) - 13)
 ```

@@ -89,17 +89,25 @@ qra_estimate_weights <-
                                   ...)
     ## retrieve weights from optimisation
     if (per_quantile_weights) {
-      weights <- c(t(qe$alpha))
+      if (intercept) {
+        intercepts <- qe$alpha[1, ]
+        weights <- c(t(qe$alpha[-1, ]))
+      } else {
+        weights <- c(t(qe$alpha))
+      }
     } else if (intercept) {
+      intercepts <- rep(qe$alpha[1], each = length(unique(x$quantile)))
       weights <- rep(qe$alpha[-1], each = length(unique(x$quantile)))
     } else {
+      intercepts <- rep(0, each = length(unique(x$quantile)))
       weights <- rep(qe$alpha, each = length(unique(x$quantile)))
     }
 
     ## create return tibble
     ret <- tidyr::expand_grid(model = unique(sort(x$model)),
                               quantile = unique(x$quantile)) %>%
-      dplyr::mutate(weight = weights)
+      dplyr::mutate(weight = weights,
+                    intercept = intercepts)
 
     return(tibble(weights = list(ret), res = list(qe)))
 }
@@ -143,9 +151,9 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
                 intercept = FALSE, ...) {
 
   ## set target date to last forecast date if missing
-  if (missing(target_date)) {target_date <- max(forecasts$creation_date)}
+  if (missing(target_date)) target_date <- max(forecasts$creation_date)
   ## initialise pooling to empty vector if not given
-  if (missing(pool)) {pool <- c()}
+  if (missing(pool)) pool <- c()
 
   if (!missing(history) && history > 0 && (!missing(min_date) || !missing(max_date))) {
     stop("If 'history' is given and > 0, 'min_date' and 'max_date' can't be." )
@@ -185,7 +193,8 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   ## training below
   grouping_vars <-
     setdiff(colnames(obs_and_pred),
-            c("creation_date", "value_date", "value", "model", "data", "quantile", pool))
+            c("creation_date", "value_date", "value", "model", "data",
+              "quantile", pool))
   pooling_vars <-
     c("model", "creation_date", pool)
 
