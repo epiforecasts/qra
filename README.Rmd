@@ -81,8 +81,7 @@ data <- df %>%
 Forecasts are pooled by forecast horizon and geography, use last <14 days of
 forecasts for optimising the weights.
 ```{r}
-res <- qra::qra(forecasts %>%
-                filter(model == "model 1"),
+res <- qra::qra(forecasts,
                 data, pool = c("horizon", "geography"),
                 min_date = max(forecasts$creation_date) - 13)
 ```

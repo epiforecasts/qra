@@ -87,29 +87,34 @@ qra_estimate_weights <-
                                   intercept = intercept,
                                   time_limit = 60,
                                   ...)
+
     ## retrieve weights from optimisation
     if (per_quantile_weights) {
       if (intercept) {
-        intercepts <- qe$alpha[1, ]
         weights <- c(t(qe$alpha[-1, ]))
+        intercepts <- qe$alpha[1, ]
       } else {
         weights <- c(t(qe$alpha))
+        intercepts <- rep(0, each = length(unique(x$quantile)))
       }
     } else if (intercept) {
-      intercepts <- rep(qe$alpha[1], each = length(unique(x$quantile)))
       weights <- rep(qe$alpha[-1], each = length(unique(x$quantile)))
+      intercepts <- qe$alpha[1]
     } else {
-      intercepts <- rep(0, each = length(unique(x$quantile)))
       weights <- rep(qe$alpha, each = length(unique(x$quantile)))
+      intercepts <- rep(0, each = length(unique(x$quantile)))
     }
 
-    ## create return tibble
-    ret <- tidyr::expand_grid(model = unique(sort(x$model)),
+    ## create return tibbles
+    wtb <- tidyr::expand_grid(model = unique(sort(x$model)),
                               quantile = unique(x$quantile)) %>%
-      dplyr::mutate(weight = weights,
-                    intercept = intercepts)
+      dplyr::mutate(weight = weights)
 
-    return(tibble(weights = list(ret), res = list(qe)))
+    itb <- tibble(quantile = unique(x$quantile),
+                  intercept = intercepts)
+    return(tibble(weights = list(wtb),
+                  intercepts = list(itb),
+                  res = list(qe)))
 }
 
 ##' @name qra
@@ -276,7 +281,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
   ## perform QRA
   if (nrow(complete_set) > 0) {
     ensemble <- complete_set %>%
-    filter(!is.na(data)) %>%
+    dplyr::filter(!is.na(data)) %>%
     tidyr::nest(test_data = c(-setdiff(grouping_vars, "creation_date"))) %>%
     dplyr::mutate(weights =
                     purrr::map(test_data, qra_estimate_weights,
@@ -284,44 +289,65 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
                                enforce_normalisation = enforce_normalisation,
                                intercept = intercept)) %>%
     tidyr::unnest(weights) %>%
-    select(-test_data)
+    dplyr::select(-test_data)
 
     if (nrow(ensemble) > 0) {
 
       weights <- ensemble %>%
-        dplyr::select(-res) %>%
+        dplyr::select(-res, -intercepts) %>%
         tidyr::unnest(weights)
 
+      intercepts <- ensemble %>%
+        dplyr::select(-res, -weights) %>%
+        tidyr::unnest(intercepts)
+
       pred <- latest_checked %>%
-        mutate(creation_date = target_date) %>%
+        dplyr::mutate(creation_date = target_date) %>%
         ## only keep value dates which have all models present
         dplyr::group_by_at(
-                 tidyselect::all_of(c(grouping_vars, "value_date", "quantile"))) %>%
+          tidyselect::all_of(c(grouping_vars, "value_date", "quantile"))
+        ) %>%
         dplyr::mutate(n = n()) %>%
         dplyr::group_by_at(tidyselect::all_of(grouping_vars)) %>%
         dplyr::filter(n == max(n)) %>%
         dplyr::select(-n) %>%
         dplyr::ungroup() %>%
         ## join weights
-        dplyr::inner_join(weights, by = c(setdiff(grouping_vars, "creation_date"),
-                                          "model", "quantile")) %>%
+        dplyr::inner_join(
+          weights, by = c(
+            setdiff(grouping_vars, "creation_date"), "model", "quantile"
+          )
+        ) %>%
         ## weigh quantiles
-        tidyr::nest(predictions = c(-setdiff(grouping_vars, "creation_date"))) %>%
+        tidyr::nest(predictions =
+                      c(-setdiff(grouping_vars, "creation_date"))) %>%
         dplyr::inner_join(ensemble %>% dplyr::select(-weights),
                           by = c(setdiff(grouping_vars, "creation_date"))) %>%
-        dplyr::mutate(values = purrr::map2(predictions, res, qra_create_ensemble, ...)) %>%
-        select(-predictions, -res) %>%
+        dplyr::mutate(
+          values = purrr::map2(predictions, res, qra_create_ensemble, ...)
+        ) %>%
+        dplyr::select(-predictions, -res) %>%
         tidyr::unnest(values) %>%
+        ## join intercepts
+        dplyr::inner_join(
+          intercepts, by = c(
+          setdiff(grouping_vars, "creation_date"), "quantile"
+          )
+        ) %>%
+        dplyr::mutate(value = value + intercept) %>%
+        dplyr::select(-intercept) %>%
         ## give model a name
         dplyr::mutate(model = "Quantile regression average")
     } else {
       weights <- NULL
+      intercepts <- NULL
       pred <- NULL
     }
   } else {
     weights <- NULL
+    intercepts <- NULL
     pred <- NULL
   }
 
-  return(list(ensemble = pred, weights = weights))
+  return(list(ensemble = pred, weights = weights, intercepts = intercepts))
 }
