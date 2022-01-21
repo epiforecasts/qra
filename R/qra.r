@@ -90,6 +90,7 @@ qra_estimate_weights <-
                                   nonneg = enforce_normalisation,
                                   unit_sum = enforce_normalisation,
                                   intercept = intercept,
+                                  noncross = noncross,
                                   time_limit = 60,
                                   ...)
 
