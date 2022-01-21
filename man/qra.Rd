@@ -17,6 +17,8 @@ qra(
   max_future = Inf,
   per_quantile_weights = FALSE,
   enforce_normalisation = TRUE,
+  intercept = FALSE,
+  noncross = TRUE,
   ...
 )
 }
@@ -51,7 +53,15 @@ consider the maximum spanning set. Options are determined by data but will be be
 
 \item{max_future}{Numeric - the maximum number of days of forecast to consider}
 
-\item{...}{any options for \code{furrr::future_map}, in particular \code{.progress}}
+\item{per_quantile_weights}{logical; whether to estimate weights per quantile}
+
+\item{enforce_normalisation}{logical; whether to enforce quantiles}
+
+\item{intercept}{logical; whether to estimate and intercept}
+
+\item{noncross}{logical; whether ot enforce non-crosssing of quantiles}
+
+\item{...}{passed to \code{predict.quantile_ensemble}; of particular interest might be setting \code{iso = TRUE} for isotonic regression}
 }
 \value{
 a list of \code{ensemble}, a data frame similar to the input forecast,

@@ -46,13 +46,18 @@ qra_create_ensemble <- function(preds, qra_res, iso = FALSE) {
 ##' \code{value}, \code{interval} columns.
 ##' @return data frame with weights per quantile (which won't vary unless
 ##' \code{per_quantile_weights} is set to TRUE), per model
+##' @param per_quantile_weights logical; whether to estimate weights per quantile
+##' @param enforce_normalisation logical; whether to enforce quantiles
+##' @param intercept logical; whether to estimate and intercept
+##' @param noncross logical; whether ot enforce non-crosssing of quantiles
 ##' @importFrom quantgen combine_into_array quantile_ensemble
 ##' @importFrom dplyr mutate select distinct group_split
 ##' @importFrom tidyr expand_grid unite
 ##' @keywords internal
 qra_estimate_weights <-
   function(x, per_quantile_weights, intercept,
-           enforce_normalisation = FALSE, ...) {
+           enforce_normalisation, noncross,
+           ...) {
 
     pred_matrices <- x %>%
       dplyr::select(-data)
@@ -139,6 +144,7 @@ qra_estimate_weights <-
 ##' consider the maximum spanning set. Options are determined by data but will be between
 ##' 0 and 1.
 ##' @param max_future Numeric - the maximum number of days of forecast to consider
+##' @param ... passed to \code{predict.quantile_ensemble}; of particular interest might be setting \code{iso = TRUE} for isotonic regression
 ##' @importFrom dplyr filter arrange desc inner_join mutate rename select bind_rows group_by_at starts_with
 ##' @importFrom tidyr gather complete nest spread
 ##' @importFrom rlang !!! syms
@@ -153,7 +159,7 @@ qra_estimate_weights <-
 qra <- function(forecasts, data, target_date, min_date, max_date, history,
                 pool, quantiles, max_future = Inf,
                 per_quantile_weights = FALSE, enforce_normalisation = TRUE,
-                intercept = FALSE, ...) {
+                intercept = FALSE, noncross = TRUE, ...) {
 
   ## set target date to last forecast date if missing
   if (missing(target_date)) target_date <- max(forecasts$creation_date)
@@ -287,7 +293,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
                     purrr::map(test_data, qra_estimate_weights,
                                per_quantile_weights = per_quantile_weights,
                                enforce_normalisation = enforce_normalisation,
-                               intercept = intercept)) %>%
+                               intercept = intercept, noncross = noncross)) %>%
     tidyr::unnest(weights) %>%
     dplyr::select(-test_data)
 

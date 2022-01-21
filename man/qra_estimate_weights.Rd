@@ -4,17 +4,32 @@
 \alias{qra_estimate_weights}
 \title{Helper function to estimate weights for QRA.}
 \usage{
-qra_estimate_weights(x, per_quantile_weights, enforce_normalisation)
+qra_estimate_weights(
+  x,
+  per_quantile_weights,
+  intercept,
+  enforce_normalisation,
+  noncross,
+  ...
+)
 }
 \arguments{
 \item{x}{input data frame containing \code{model}, \code{quantile}, \code{boundary},
 \code{value}, \code{interval} columns.}
+
+\item{per_quantile_weights}{logical; whether to estimate weights per quantile}
+
+\item{intercept}{logical; whether to estimate and intercept}
+
+\item{enforce_normalisation}{logical; whether to enforce quantiles}
+
+\item{noncross}{logical; whether ot enforce non-crosssing of quantiles}
 }
 \value{
 data frame with weights per quantile (which won't vary unless
 \code{per_quantile_weights} is set to TRUE), per model
 }
 \description{
-for a data frame
+Helper function to estimate weights for QRA.
 }
 \keyword{internal}
