@@ -335,14 +335,6 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
         ) %>%
         dplyr::select(-predictions, -res) %>%
         tidyr::unnest(values) %>%
-        ## join intercepts
-        dplyr::inner_join(
-          intercepts, by = c(
-          setdiff(grouping_vars, "creation_date"), "quantile"
-          )
-        ) %>%
-        dplyr::mutate(value = value + intercept) %>%
-        dplyr::select(-intercept) %>%
         ## give model a name
         dplyr::mutate(model = "Quantile regression average")
     } else {
