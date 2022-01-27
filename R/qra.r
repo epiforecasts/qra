@@ -20,14 +20,14 @@ to_matrix <- function(x) {
 ##' @param preds predictions
 ##' @param qra_res QRA result
 ##' @return tibble
-qra_create_ensemble <- function(preds, qra_res, iso = FALSE) {
+qra_create_ensemble <- function(preds, qra_res, ...) {
   pred_matrices <- preds %>%
     dplyr::select(-weight) %>%
     dplyr::group_split(model) %>%
     lapply(to_matrix) %>%
     quantgen::combine_into_array()
 
-  values <- predict(qra_res, pred_matrices, iso = iso)
+  values <- predict(qra_res, pred_matrices, ...)
   colnames(values) <- unique(preds$quantile)
 
   res <- preds %>%
