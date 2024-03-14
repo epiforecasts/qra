@@ -1,3 +1,7 @@
+---
+output: github_document
+---
+
 ## Quantile regression average
 
 NB: This is a transient package that will probably be merged into the
@@ -84,4 +88,5 @@ forecasts for optimising the weights.
 res <- qra::qra(forecasts,
                 data, pool = c("horizon", "geography"),
                 min_date = max(forecasts$creation_date) - 13)
+res
 ```

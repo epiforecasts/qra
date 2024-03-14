@@ -276,7 +276,7 @@ qra <- function(forecasts, data, target_date, min_date, max_date, history,
     dplyr::group_by_at(tidyselect::all_of(c(grouping_vars, "horizon"))) %>%
     ## create complete tibble of all combinations of creation date, model
     ## and pooling variables
-    tidyr::complete(!!!syms(pooling_vars)) %>%
+    tidyr::complete(!!!syms(setdiff(pooling_vars, "horizon"))) %>%
     ## check if anything is missing and filter out
     dplyr::group_by_at(
              tidyselect::all_of(c(grouping_vars, "model"))) %>%
