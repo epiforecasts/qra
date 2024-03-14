@@ -1,3 +1,7 @@
+---
+output: github_document
+---
+
 ## Quantile regression average
 
 NB: This is a transient package that will probably be merged into the
