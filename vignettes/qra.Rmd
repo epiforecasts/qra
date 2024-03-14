@@ -1,0 +1,51 @@
+---
+title: "Getting started with `qra`"
+output:
+  rmarkdown::html_vignette:
+    toc: false
+    number_sections: false
+bibliography: library.bib
+csl: https://raw.githubusercontent.com/citation-style-language/styles/master/apa-numeric-superscript-brackets.csl
+vignette: >
+  %\VignetteIndexEntry{Getting started with qra}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+The `qra` package can be used to train ensemble models from forecasts given in quantile format. It uses the [quantgen](ryantibs) package for the underlying optimisation.
+
+It works with data frames of forecasts and data, similar to the ones used in the [scoringutils](https://epiforecasts.io/scoringutils) package. The outputs it produces are in the same format.
+
+## Definitions
+
+The `qra()` function which is at the heart of the package needs a complete set of past forecasts and observations in order to optimise predictive performance of the resulting ensemble.
+It works with the forecast format defined by the [scoringutils](https://epiforecasts.io/scoringutils) package which can be constructed from data frames of forecasts and data using the `as_forecast()` function.
+This function defines the column that determine a "forecast unit".
+A subgroup of these and the `quantile_level` column can be used in `qra()` are treated as "pooling variables".
+These are variables that are seen to representing the same forecasting task, and they are treated as nuisance variables when constributing the ensmble.
+For example, if `horizon` is a column that represents how far ahead a forecast has been made, and it is treated as a pooling variable, then each ensemble will cover all horizons, and will have weights constructed using forecasts and scores across all horizons.
+If is not treated as a pooling variable, then a separate ensemble will be created for each horizon.
+
+The complimentary set of the pooling variables amongst all columns representing a forecast unit are so-called grouping variables.
+An ensemble is created for each combination of grouping variables.
+For example, if `horizon` is specified as a grouping variable then it is not treated as pooling variable, an ensemble will be created for each horizon (and/or combination of `horizon` and any other grouping variable).
+If it is not specified as grouping variable it is treated as pooling variable.
+
+## Prerequisites
+
+In order to create an ensemble, each composite model needs to be present for each combination of pooling and grouping variables that is present in the data.
+Any model with missing forecasts is excluded from the ensemble.
+
+## Example
+
+Create an ensemble for each location, and separately for cases and deaths, for the 24th of July 2021:
+
+```r
+library("scoringutils")
+example_quantile |>
+  as_forecast() |>
+  qra(
+    group = c("target_type", "location", "location_name"),
+    target = c(target_end_date = "2021-07-24")
+  )
+```

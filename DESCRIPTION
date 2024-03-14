@@ -12,20 +12,21 @@ Authors@R:
             email = "contact@samabbott.co.uk",
             comment = c(ORCID = "0000-0001-8057-8037")))
 Description: Performs quantile regression average
+Depends:
+    R (>= 4.1.0)
 Imports:
-  dplyr,
-  future.apply,
-  nloptr,
+  checkmate,
+  data.table,
   quantgen,
-  readr,
-  rlang,
-  scoringutils,
-  tidyr,
-  tidyselect,
-  purrr
+  scoringutils
+Suggests:
+    roxyglobals
+Remotes: ryantibs/quantgen/quantgen
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
-Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.1.2
-Remotes: ryantibs/quantgen/quantgen
+Roxygen: list(markdown = TRUE, roclets = c("collate", "namespace", "rd",
+    "roxyglobals::global_roclet"))
+RoxygenNote: 7.3.1
+Config/roxyglobals/filename: globals.R
+Config/roxyglobals/unique: FALSE

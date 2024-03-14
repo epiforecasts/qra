@@ -6,15 +6,10 @@
 Calculates a quantile regression average for forecasts.}
 \usage{
 qra(
-  forecasts,
-  data,
-  target_date,
-  min_date,
-  max_date,
-  history,
-  pool,
-  quantiles,
-  max_future = Inf,
+  forecast,
+  target,
+  group = c(),
+  model = "Quantile Regression Average",
   per_quantile_weights = FALSE,
   enforce_normalisation = TRUE,
   intercept = FALSE,
@@ -23,37 +18,24 @@ qra(
 )
 }
 \arguments{
-\item{forecasts}{data frame with forecasts; this is expected to have columns
-\code{model} (a character string), \code{creation_date} (the date at which the
-forecast was made), \code{value_date} (the date for which a forecsat was
-created), \code{quantile} (the quantile level, between 0 and
-\enumerate{
-\item and \code{value} (the forecast at the quantile level)
-}}
+\item{forecast}{a data.table representing forecast; this is expected to
+have been created using \code{\link[scoringutils:as_forecast]{scoringutils::as_forecast()}}}
 
-\item{data}{data frame with a \code{value} column, and otherwise matching columns
-to \code{forecasts} (especially \code{value_date})}
+\item{target}{the target for which to create the quantile regression
+average. This should be given as a vector of form \code{column = target},
+where target is the value of column that represents the target. Note that
+the column named here cannot be a grouping variable.}
 
-\item{target_date}{the date for which to create a QRA; by default, will use
-the latest \\code{creation_date} in \\code{forecasts}}
+\item{group}{any columns wihch to group a vector of character vectors (e.g.,
+"horizon", "geography_scale", etc.) indicating columns in the
+\code{forecasts} and \code{data} data frames; by default, will not group
+anything, i.e. create one ensemble model}
 
-\item{min_date}{the minimum creation date for past forecasts to be included}
+\item{model}{the name of the model to return; default: "Quantile Regression
+Average"}
 
-\item{max_date}{the maximum creation date for past forecasts to be included}
-
-\item{history}{number of historical forecasts to include}
-
-\item{pool}{any columns to pool as a list of character vectors (e.g.,
-"horizon", "geography_scale", etc.) indicating columns in the \code{forecasts}
-and \code{data} data frames; by default, will not pool across anything}
-
-\item{quantiles}{Numeric - which quantiles to consider; by default will
-consider the maximum spanning set. Options are determined by data but will be between
-0 and 1.}
-
-\item{max_future}{Numeric - the maximum number of days of forecast to consider}
-
-\item{per_quantile_weights}{logical; whether to estimate weights per quantile}
+\item{per_quantile_weights}{logical; whether to estimate weights per
+quantile}
 
 \item{enforce_normalisation}{logical; whether to enforce quantiles}
 
@@ -61,12 +43,13 @@ consider the maximum spanning set. Options are determined by data but will be be
 
 \item{noncross}{logical; whether ot enforce non-crosssing of quantiles}
 
-\item{...}{passed to \code{predict.quantile_ensemble}; of particular interest might be setting \code{iso = TRUE} for isotonic regression}
+\item{...}{passed to \code{\link[quantgen:predict.quantile_ensemble]{quantgen::predict.quantile_ensemble()}}; of particular
+interest might be setting \code{iso = TRUE} for isotonic regression}
 }
 \value{
-a list of \code{ensemble}, a data frame similar to the input forecast,
-but with \\code{model} set to "Quantile regression average" and the values
-set to the weighted averages; and \code{weights}, a data frame giving the weights
+a data.table representing the forecasts forecast, but with
+\code{model} set to the value of the `model parameter. This will be in the
+forecast format produced by \code{\link[scoringutils:as_forecast]{scoringutils::as_forecast()}}
 }
 \description{
 Quantile Regression Average
