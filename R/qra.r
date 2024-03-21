@@ -41,7 +41,9 @@ qra_create_ensemble <- function(x, target, per_quantile_weights, intercept,
   pred <- predict(qe, test$predictions, ...)
   target_forecast <- unique(target[, !c("observed", "predicted", "model")])
   target_forecast <- target_forecast[, predicted := c(pred)]
-  target_forecast <- target_forecast[, observed := rep(test$data, times = length(tau))]
+  target_forecast <- target_forecast[,
+    observed := rep(test$data, times = length(tau))
+  ]
 
   ## retrieve weights from optimisation
   if (per_quantile_weights) {
@@ -91,7 +93,7 @@ qra_create_ensemble <- function(x, target, per_quantile_weights, intercept,
 #' @keywords internal
 qra_preprocess_forecasts <- function(forecast) {
   forecast_unit <- get_forecast_unit(forecast)
-  setorder(forecast, quantile_level)
+  setorder(forecast, "quantile_level")
 
   ## create data vector
   data <- forecast[,
@@ -129,13 +131,16 @@ qra_preprocess_forecasts <- function(forecast) {
 #'   missing forecasts, and the target forecasts removed)
 #' @importFrom data.table merge.data.table as.data.table
 #' @keywords internal
+#' @autoglobal
 split_forecast <- function(forecast, forecast_unit, target) {
   forecast_unit <- get_forecast_unit(forecast)
   ## check for missing values by first creating a complete set of grouping and
   ## pooling variables
-  present <- unique(forecast[,
+  present <- unique(
+    forecast[,
       c(setdiff(forecast_unit, "model"), "quantile_level"), with = FALSE
-  ])
+    ]
+  )
   complete_set <- present[, list(model = unique(forecast$model)), by = present]
   ## next,  merge into the data
   merged <- merge.data.table(
