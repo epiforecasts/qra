@@ -2,18 +2,42 @@
 % Please edit documentation in R/qra.r
 \name{qra_create_ensemble}
 \alias{qra_create_ensemble}
-\title{Helper function to create a QRA ensemble}
+\title{Create a qra ensemble}
 \usage{
-qra_create_ensemble(preds, qra_res, iso = FALSE)
+qra_create_ensemble(
+  x,
+  target,
+  per_quantile_weights,
+  intercept,
+  enforce_normalisation,
+  noncross,
+  ...
+)
 }
 \arguments{
-\item{preds}{predictions}
+\item{x}{input data frame containing \code{model}, \code{quantile},
+\code{boundary}, \code{value}, \code{interval} columns.}
 
-\item{qra_res}{QRA result}
+\item{target}{input data frame
+\code{boundary}, \code{value}, \code{interval} columns.}
+
+\item{per_quantile_weights}{logical; whether to estimate weights per
+quantile}
+
+\item{intercept}{logical; whether to estimate and intercept}
+
+\item{enforce_normalisation}{logical; whether to enforce quantiles}
+
+\item{noncross}{logical; whether ot enforce non-crosssing of quantiles}
+
+\item{...}{passed to \code{\link[quantgen:predict.quantile_ensemble]{quantgen::predict.quantile_ensemble()}}; of particular
+interest might be setting \code{iso = TRUE} for isotonic regression}
 }
 \value{
-tibble
+data frame with weights per quantile (which won't vary unless
+\code{per_quantile_weights} is set to TRUE), per model
 }
 \description{
-Helper function to create a QRA ensemble
+Create a qra ensemble
 }
+\keyword{internal}

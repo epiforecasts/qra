@@ -1,352 +1,237 @@
-##' Helper function to convert a data frame of forecasts into a list of matrices
+##' Create a qra ensemble
 ##'
-##' @param x input data frame
-##' @return list of matrices
-##' @author Sebastian Funk
-##' @importFrom dplyr select
-##' @importFrom tidyr unite spread
-##' @keywords internal
-to_matrix <- function(x) {
-  x %>%
-    dplyr::select(-model) %>%
-    tidyr::unite(prediction_date, creation_date, value_date) %>%
-    tidyr::spread(quantile, value) %>%
-    dplyr::select(starts_with("0")) %>%
-    as.matrix()
-}
-
-##' Helper function to create a QRA ensemble
-##'
-##' @param preds predictions
-##' @param qra_res QRA result
-##' @return tibble
-qra_create_ensemble <- function(preds, qra_res, ...) {
-  pred_matrices <- preds %>%
-    dplyr::select(-weight) %>%
-    dplyr::group_split(model) %>%
-    lapply(to_matrix) %>%
-    quantgen::combine_into_array()
-
-  values <- predict(qra_res, pred_matrices, ...)
-  colnames(values) <- unique(preds$quantile)
-
-  res <- preds %>%
-    select(-model, -quantile, -weight, -value) %>%
-    distinct() %>%
-    cbind(as_tibble(values)) %>%
-    tidyr::gather(quantile, value, matches("^0")) %>%
-    mutate(quantile = as.numeric(quantile))
-
-  return(res)
-}
-
-##' Helper function to estimate weights for QRA.
-##'
-##' @param x input data frame containing \code{model}, \code{quantile}, \code{boundary},
-##' \code{value}, \code{interval} columns.
+##' @param x input data frame containing \code{model}, \code{quantile},
+##'   \code{boundary}, \code{value}, \code{interval} columns.
+##' @param target input data frame
+##'   \code{boundary}, \code{value}, \code{interval} columns.
 ##' @return data frame with weights per quantile (which won't vary unless
-##' \code{per_quantile_weights} is set to TRUE), per model
-##' @param per_quantile_weights logical; whether to estimate weights per quantile
+##'   \code{per_quantile_weights} is set to TRUE), per model
+##' @param per_quantile_weights logical; whether to estimate weights per
+##'   quantile
 ##' @param enforce_normalisation logical; whether to enforce quantiles
 ##' @param intercept logical; whether to estimate and intercept
 ##' @param noncross logical; whether ot enforce non-crosssing of quantiles
-##' @importFrom quantgen combine_into_array quantile_ensemble
-##' @importFrom dplyr mutate select distinct group_split
-##' @importFrom tidyr expand_grid unite
+##' @param ... passed to [quantgen::predict.quantile_ensemble()]; of particular
+##'   interest might be setting \code{iso = TRUE} for isotonic regression
+##' @importFrom quantgen quantile_ensemble
+##' @importFrom data.table := CJ data.table
+##' @autoglobal
 ##' @keywords internal
-qra_estimate_weights <-
-  function(x, per_quantile_weights, intercept,
-           enforce_normalisation, noncross,
-           ...) {
+qra_create_ensemble <- function(x, target, per_quantile_weights, intercept,
+                                enforce_normalisation, noncross,
+                                ...) {
+  ## prepare data table
+  train <- qra_preprocess_forecasts(x)
+  test <- qra_preprocess_forecasts(target)
 
-    pred_matrices <- x %>%
-      dplyr::select(-data)
+  tau <- train$quantile_levels
 
-    pred_matrices <- pred_matrices %>%
-      dplyr::group_split(model) %>%
-      lapply(to_matrix) %>%
-      quantgen::combine_into_array()
+  if (per_quantile_weights) {
+    tau_groups <- seq_along(tau)
+  } else {
+    tau_groups <- rep(1, length(tau))
+  }
 
-    data <- x %>%
-      tidyr::unite(prediction_date, creation_date, value_date) %>%
-      dplyr::group_by_at(dplyr::vars(-model, -quantile, -value, -data)) %>%
-      dplyr::summarise(data = unique(data)) %>%
-      .$data
+  qe <- quantile_ensemble(
+    train$predictions, train$data, tau, tau_groups = tau_groups,
+    nonneg = enforce_normalisation, unit_sum = enforce_normalisation,
+    intercept = intercept, noncross = noncross, time_limit = 60
+  )
 
-    tau <- x %>%
-      dplyr::select(quantile) %>%
-      dplyr::distinct() %>%
-      .$quantile
+  pred <- predict(qe, test$predictions, ...)
+  target_forecast <- unique(target[, !c("observed", "predicted", "model")])
+  target_forecast <- target_forecast[, predicted := c(pred)]
+  target_forecast <- target_forecast[,
+    observed := rep(test$data, times = length(tau))
+  ]
 
-    if (per_quantile_weights) {
-      tau_groups <- seq_along(tau)
+  ## retrieve weights from optimisation
+  if (per_quantile_weights) {
+    if (intercept) {
+      weights <- c(t(qe$alpha[-1, ]))
+      intercepts <- qe$alpha[1, ]
     } else {
-      tau_groups <- rep(1, length(tau))
+      weights <- c(t(qe$alpha))
+      intercepts <- rep(0, each = length(tau))
     }
+  } else if (intercept) {
+    weights <- rep(qe$alpha[-1], each = length(tau))
+    intercepts <- qe$alpha[1]
+  } else {
+    weights <- rep(qe$alpha, each = length(tau))
+    intercepts <- rep(0, each = length(tau))
+  }
 
-    qe <-
-      quantgen::quantile_ensemble(pred_matrices, data, tau,
-                                  tau_groups = tau_groups,
-                                  nonneg = enforce_normalisation,
-                                  unit_sum = enforce_normalisation,
-                                  intercept = intercept,
-                                  noncross = noncross,
-                                  time_limit = 60,
-                                  ...)
+  ## create return tibbles
+  wtb <- CJ(
+    model = unique(x$model),
+    quantile = unique(x$quantile_level)
+  )[, weight := weights]
 
-    ## retrieve weights from optimisation
-    if (per_quantile_weights) {
-      if (intercept) {
-        weights <- c(t(qe$alpha[-1, ]))
-        intercepts <- qe$alpha[1, ]
-      } else {
-        weights <- c(t(qe$alpha))
-        intercepts <- rep(0, each = length(unique(x$quantile)))
-      }
-    } else if (intercept) {
-      weights <- rep(qe$alpha[-1], each = length(unique(x$quantile)))
-      intercepts <- qe$alpha[1]
-    } else {
-      weights <- rep(qe$alpha, each = length(unique(x$quantile)))
-      intercepts <- rep(0, each = length(unique(x$quantile)))
-    }
+  itb <- data.table(
+    quantile = unique(x$quantile),
+    intercept = intercepts
+  )
+  return(list(
+    weights = wtb,
+    intercepts = itb,
+    ensemble = target_forecast
+  ))
+}
 
-    ## create return tibbles
-    wtb <- tidyr::expand_grid(model = unique(sort(x$model)),
-                              quantile = unique(x$quantile)) %>%
-      dplyr::mutate(weight = weights)
+#' Preprocess forecasts for QRA
+#'
+#' This splits forecasts into data and forecast, and excludes any models that
+#' have missing forecasts
+#' @inheritParams qra
+#' @return A list with three elements: `predictions` (a data.table only
+#' containing the predictions), `data` (a data.table only containing the data)
+#' and `models` (a data.table listing the models and whether they are
+#' included)
+#' @importFrom data.table setorder dcast
+#' @importFrom quantgen combine_into_array
+#' @keywords internal
+qra_preprocess_forecasts <- function(forecast) {
+  forecast_unit <- get_forecast_unit(forecast)
+  setorder(forecast, "quantile_level")
 
-    itb <- tibble(quantile = unique(x$quantile),
-                  intercept = intercepts)
-    return(tibble(weights = list(wtb),
-                  intercepts = list(itb),
-                  res = list(qe)))
+  ## create data vector
+  data <- forecast[,
+    list(observed = unique(observed)), by = c(setdiff(forecast_unit, "model"))
+  ][, observed]
+
+  ## create prediction arrays
+  pred_matrices <- forecast[, !"observed"]
+  pred_matrices <- split(pred_matrices, by = "model")
+  pred_matrices <- lapply(pred_matrices, function(x) {
+    dt <- dcast(x, ... ~ quantile_level, value.var = "predicted")
+    dt[, paste(forecast_unit) := NULL]
+    return(as.matrix(dt))
+  })
+  ## combine into array
+  pred_arrays <- combine_into_array(pred_matrices)
+
+  quantile_levels <- unique(forecast$quantile_level)
+
+  return(
+    list(
+      predictions = pred_arrays,
+      data = data,
+      quantile_levels = quantile_levels
+    )
+  )
+}
+
+#' Split forecast
+#'
+#' Splits forecast into data and forecast, excludes any models aren't copmlete,
+#' and splits out the forecast target
+#' @inheritParams qra
+#' @return a list with forecast (the forecast with models removed that have
+#'   missing forecasts, and the target forecasts removed)
+#' @importFrom data.table merge.data.table as.data.table
+#' @keywords internal
+#' @autoglobal
+split_forecast <- function(forecast, forecast_unit, target) {
+  forecast_unit <- get_forecast_unit(forecast)
+  ## check for missing values by first creating a complete set of grouping and
+  ## pooling variables
+  present <- unique(
+    forecast[,
+      c(setdiff(forecast_unit, "model"), "quantile_level"), with = FALSE
+    ]
+  )
+  complete_set <- present[, list(model = unique(forecast$model)), by = present]
+  ## next,  merge into the data
+  merged <- merge.data.table(
+    forecast, complete_set, by = colnames(complete_set), all.y = TRUE
+  )
+  ## check for each model whether any column has an na
+  models <- as.data.table(merged[, list(included = !anyNA(.SD)), by = model])
+  present_models <- as.data.table(present[, as.list(models), by = present])
+
+  ## remove models with missing forecasts
+  forecast <- forecast[model %in% models[included == TRUE, model]]
+
+  ## split off target
+  target_forecast <- forecast[get(names(target)) == target]
+  forecast <- forecast[get(names(target)) != target]
+
+  return(
+    list(
+      forecast = forecast,
+      target = target_forecast,
+      models = present_models
+    )
+  )
 }
 
 ##' @name qra
 ##' @title Quantile Regression Average
 ##' Calculates a quantile regression average for forecasts.
-##' @param forecasts data frame with forecasts; this is expected to have columns
-##' \code{model} (a character string), \code{creation_date} (the date at which the
-##' forecast was made), \code{value_date} (the date for which a forecsat was
-##' created), \code{quantile} (the quantile level, between 0 and
-##' 1) and \code{value} (the forecast at the quantile level)
-##' @param data data frame with a \code{value} column, and otherwise matching columns
-##' to \code{forecasts} (especially \code{value_date})
-##' @param target_date the date for which to create a QRA; by default, will use
-##' the latest \\code{creation_date} in \\code{forecasts}
-##' @param min_date the minimum creation date for past forecasts to be included
-##' @param max_date the maximum creation date for past forecasts to be included
-##' @param history number of historical forecasts to include
-##' @param pool any columns to pool as a list of character vectors (e.g.,
-##' "horizon", "geography_scale", etc.) indicating columns in the \code{forecasts}
-##' and \code{data} data frames; by default, will not pool across anything
-##' @param quantiles Numeric - which quantiles to consider; by default will
-##' consider the maximum spanning set. Options are determined by data but will be between
-##' 0 and 1.
-##' @param max_future Numeric - the maximum number of days of forecast to consider
-##' @param ... passed to \code{predict.quantile_ensemble}; of particular interest might be setting \code{iso = TRUE} for isotonic regression
-##' @importFrom dplyr filter arrange desc inner_join mutate rename select bind_rows group_by_at starts_with
-##' @importFrom tidyr gather complete nest spread
-##' @importFrom rlang !!! syms
-##' @importFrom readr parse_number
-##' @importFrom tidyselect all_of
-##' @importFrom purrr map
-##' @inheritParams qra_estimate_weights
-##' @return a list of \code{ensemble}, a data frame similar to the input forecast,
-##' but with \\code{model} set to "Quantile regression average" and the values
-##' set to the weighted averages; and \code{weights}, a data frame giving the weights
+##' @param forecast a data.table representing forecast; this is expected to
+##'   have been created using [scoringutils::as_forecast()]
+##' @param target the target for which to create the quantile regression
+##'   average. This should be given as a vector of form `column = target`,
+##'   where target is the value of column that represents the target. Note that
+##'   the column named here cannot be a grouping variable.
+##' @param group any columns wihch to group a vector of character vectors (e.g.,
+##'   "horizon", "geography_scale", etc.) indicating columns in the
+##'   \code{forecasts} and \code{data} data frames; by default, will not group
+##'   anything, i.e. create one ensemble model
+##' @param model the name of the model to return; default: "Quantile Regression
+##'   Average"
+##' @param ... passed to [quantgen::predict.quantile_ensemble()]; of particular
+##'   interest might be setting \code{iso = TRUE} for isotonic regression
+##' @inheritParams qra_create_ensemble
+##' @return a data.table representing the forecasts forecast, but with
+##'   \code{model} set to the value of the `model parameter. This will be in the
+##'   forecast format produced by [scoringutils::as_forecast()]
+##' @autoglobal
+##' @importFrom data.table rbindlist setattr
+##' @importFrom purrr transpose map map2
+##' @importFrom scoringutils as_forecast
+##' @importFrom checkmate assert_class
 ##' @export
-qra <- function(forecasts, data, target_date, min_date, max_date, history,
-                pool, quantiles, max_future = Inf,
+qra <- function(forecast, target, group = c(),
+                model = "Quantile Regression Average",
                 per_quantile_weights = FALSE, enforce_normalisation = TRUE,
                 intercept = FALSE, noncross = TRUE, ...) {
 
-  ## set target date to last forecast date if missing
-  if (missing(target_date)) target_date <- max(forecasts$creation_date)
-  ## initialise pooling to empty vector if not given
-  if (missing(pool)) pool <- c()
+  assert_class(forecast, "forecast_quantile")
+  forecast_unit <- get_forecast_unit(forecast)
 
-  if (!missing(history) && history > 0 && (!missing(min_date) || !missing(max_date))) {
-    stop("If 'history' is given and > 0, 'min_date' and 'max_date' can't be." )
-  }
+  ## filter out missing forecasts
+  forecast <- forecast[!is.na(predicted)]
 
-  forecasts <- forecasts %>%
-    dplyr::mutate(horizon = as.integer(value_date - creation_date)) %>%
-    dplyr::arrange(dplyr::desc(creation_date), model, quantile)
+  ## first, split by group
+  ensemble <- split(forecast, by = group)
+  ## next, re-convert to forecast format0
+  ensemble <- map(ensemble, as_forecast, forecast_unit = forecast_unit)
+  ## next, split off target forecasts and check for completeness
+  ensemble <- transpose(map(ensemble, split_forecast, forecast_unit, target))
+  ## now, determine weights and intercepts
+  ensemble <- c(ensemble, transpose(map2(
+    ensemble[["forecast"]], ensemble[["target"]],
+    qra_create_ensemble,
+    per_quantile_weights = per_quantile_weights,
+    enforce_normalisation = enforce_normalisation,
+    intercept = intercept,
+    noncross = noncross, ...
+  )))
 
-  ## data frame with the forecasts that are being combined
-  latest_forecasts <- forecasts %>%
-    dplyr::filter(creation_date == target_date)
+  ## remove inputs
+  ensemble[["forecast"]] <- NULL
+  ensemble[["target"]] <- NULL
 
-  ## prepare data frame containing data and predictions
-  obs_and_pred <- forecasts %>%
-    dplyr::filter(creation_date < target_date)
+  ## pull together
+  ensemble <- map(ensemble, rbindlist)
 
-  creation_dates <- unique(obs_and_pred$creation_date)
+  ret <- as_forecast(ensemble[["ensemble"]][, model := ..model])
+  setattr(ret, "weights", ensemble[["weights"]])
+  setattr(ret, "intercept", ensemble[["intercept"]])
+  setattr(ret, "models", ensemble[["models"]])
+  setattr(ret, "class", c("qra", class(ret)))
 
-  ## determine dates for training data set
-  if (!missing(min_date)) {
-    creation_dates <- creation_dates[creation_dates >= min_date]
-  }
-  if (!missing(max_date)) {
-    creation_dates <- creation_dates[creation_dates <= max_date]
-  }
-  if (!missing(history) && history > 0) {
-    if (history <= length(creation_dates)) {
-      creation_dates <-
-        creation_dates[seq_len(history)]
-    } else {
-      return(list(weights = NULL, ensemble = NULL))
-    }
-  }
-
-  ## create helper vars for creating a complete set of models to be used for
-  ## training below
-  grouping_vars <-
-    setdiff(colnames(obs_and_pred),
-            c("creation_date", "value_date", "value", "model", "data",
-              "quantile", pool))
-  pooling_vars <-
-    c("model", "creation_date", pool)
-
-  latest_checked <- latest_forecasts %>%
-    dplyr::group_by_at(tidyselect::all_of(grouping_vars)) %>%
-    ## create complete tibble of all combinations of creation date, model
-    ## and pooling variables
-    tidyr::complete(!!!syms(setdiff(pooling_vars, "horizon"))) %>%
-    ## check if anything is missing and filter out
-    dplyr::group_by_at(
-             tidyselect::all_of(c(grouping_vars, "model"))) %>%
-    dplyr::mutate(any_na = any(is.na(value))) %>%
-    dplyr::filter(!any_na) %>%
-    dplyr::select(-any_na)
-
-  if (nrow(latest_checked) == 0) {
-    return(list(weights = NULL, ensemble = NULL))
-  }
-
-  present_models <- latest_checked %>%
-    ## check present models
-    dplyr::select_at(tidyselect::all_of(c("model", grouping_vars))) %>%
-    dplyr::distinct()
-
-  if (nrow(present_models) > 0) {
-
-    ## create training data set
-    obs_and_pred <- obs_and_pred %>%
-      dplyr::filter(creation_date %in% creation_dates) %>%
-      ## select present models
-      dplyr::inner_join(present_models, by = colnames(present_models))
-
-    ## maximum horizon by grouping variables - the last date on which all models
-    ## are available
-    max_horizons <- obs_and_pred %>%
-      filter(horizon <= max_future) %>%
-      dplyr::group_by_at(
-               tidyselect::all_of(c(setdiff(grouping_vars, "horizon"),
-                                    "creation_date", "model"))) %>%
-      dplyr::mutate(max_horizon = max(horizon)) %>%
-      dplyr::group_by_at(tidyselect::all_of(c(grouping_vars, "creation_date"))) %>%
-      dplyr::summarise(max_horizon = min(max_horizon)) %>%
-      dplyr::ungroup()
-
-    obs_and_pred <- obs_and_pred %>%
-      ## filter <= max horizon
-      dplyr::left_join(max_horizons, by = c(grouping_vars, "creation_date")) %>%
-      dplyr::filter(horizon <= max_horizon) %>%
-      dplyr::select(-max_horizon)
-
-  }
-
-  obs_and_pred <- obs_and_pred %>%
-      ## join data
-      dplyr::left_join(data,
-                 by = setdiff(colnames(data), c("value"))) %>%
-      dplyr::rename(value = value.x, data = value.y)
-
-  ## check if only specific quantiles are to be used
-  if (!missing(quantiles)) {
-    obs_and_pred <- obs_and_pred %>%
-      dplyr::filter(quantile %in% quantiles)
-  }
-
-  ## require a complete set of forecasts to be include in QRA
-  complete_set <- obs_and_pred %>%
-    dplyr::group_by_at(tidyselect::all_of(c(grouping_vars, "horizon"))) %>%
-    ## create complete tibble of all combinations of creation date, model
-    ## and pooling variables
-    tidyr::complete(!!!syms(setdiff(pooling_vars, "horizon"))) %>%
-    ## check if anything is missing and filter out
-    dplyr::group_by_at(
-             tidyselect::all_of(c(grouping_vars, "model"))) %>%
-    dplyr::mutate(any_na = any(is.na(value))) %>%
-    dplyr::filter(!any_na) %>%
-    dplyr::select(-any_na) %>%
-    ungroup()
-
-  ## perform QRA
-  if (nrow(complete_set) > 0) {
-    ensemble <- complete_set %>%
-    dplyr::filter(!is.na(data)) %>%
-    tidyr::nest(test_data = c(-setdiff(grouping_vars, "creation_date"))) %>%
-    dplyr::mutate(weights =
-                    purrr::map(test_data, qra_estimate_weights,
-                               per_quantile_weights = per_quantile_weights,
-                               enforce_normalisation = enforce_normalisation,
-                               intercept = intercept, noncross = noncross)) %>%
-    tidyr::unnest(weights) %>%
-    dplyr::select(-test_data)
-
-    if (nrow(ensemble) > 0) {
-
-      weights <- ensemble %>%
-        dplyr::select(-res, -intercepts) %>%
-        tidyr::unnest(weights)
-
-      intercepts <- ensemble %>%
-        dplyr::select(-res, -weights) %>%
-        tidyr::unnest(intercepts)
-
-      pred <- latest_checked %>%
-        dplyr::mutate(creation_date = target_date) %>%
-        ## only keep value dates which have all models present
-        dplyr::group_by_at(
-          tidyselect::all_of(c(grouping_vars, "value_date", "quantile"))
-        ) %>%
-        dplyr::mutate(n = n()) %>%
-        dplyr::group_by_at(tidyselect::all_of(grouping_vars)) %>%
-        dplyr::filter(n == max(n)) %>%
-        dplyr::select(-n) %>%
-        dplyr::ungroup() %>%
-        ## join weights
-        dplyr::inner_join(
-          weights, by = c(
-            setdiff(grouping_vars, "creation_date"), "model", "quantile"
-          )
-        ) %>%
-        ## weigh quantiles
-        tidyr::nest(predictions =
-                      c(-setdiff(grouping_vars, "creation_date"))) %>%
-        dplyr::inner_join(ensemble %>% dplyr::select(-weights),
-                          by = c(setdiff(grouping_vars, "creation_date"))) %>%
-        dplyr::mutate(
-          values = purrr::map2(predictions, res, qra_create_ensemble, ...)
-        ) %>%
-        dplyr::select(-predictions, -res) %>%
-        tidyr::unnest(values) %>%
-        ## give model a name
-        dplyr::mutate(model = "Quantile regression average")
-    } else {
-      weights <- NULL
-      intercepts <- NULL
-      pred <- NULL
-    }
-  } else {
-    weights <- NULL
-    intercepts <- NULL
-    pred <- NULL
-  }
-
-  return(list(ensemble = pred, weights = weights, intercepts = intercepts))
+  return(ret)
 }
