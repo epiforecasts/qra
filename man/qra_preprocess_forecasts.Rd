@@ -8,7 +8,7 @@ qra_preprocess_forecasts(forecast)
 }
 \arguments{
 \item{forecast}{a data.table representing forecast; this is expected to
-have been created using \code{\link[scoringutils:as_forecast]{scoringutils::as_forecast()}}}
+have been created using \code{\link[scoringutils:as_forecast_quantile]{scoringutils::as_forecast_quantile()}}}
 }
 \value{
 A list with three elements: \code{predictions} (a data.table only

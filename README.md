@@ -28,7 +28,7 @@ deaths, for the 24th of July 2021
 ``` r
 library("scoringutils")
 example_quantile |>
-  as_forecast() |>
+  as_forecast_quantile() |>
   qra(
     group = c("target_type", "location", "location_name"),
     target = c(target_end_date = "2021-07-24")
