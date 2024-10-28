@@ -20,7 +20,7 @@ a list with forecast (the forecast with models removed that have
 missing forecasts, and the target forecasts removed)
 }
 \description{
-Splits forecast into data and forecast, excludes any models aren't copmlete,
+Splits forecast into data and forecast, excludes any models aren't complete,
 and splits out the forecast target
 }
 \keyword{internal}
