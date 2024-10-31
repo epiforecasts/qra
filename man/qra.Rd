@@ -19,7 +19,7 @@ qra(
 }
 \arguments{
 \item{forecast}{a data.table representing forecast; this is expected to
-have been created using \code{\link[scoringutils:as_forecast]{scoringutils::as_forecast()}}}
+have been created using \code{\link[scoringutils:as_forecast_quantile]{scoringutils::as_forecast_quantile()}}}
 
 \item{target}{the target for which to create the quantile regression
 average. This should be given as a vector of form \code{column = target},
@@ -49,7 +49,7 @@ interest might be setting \code{iso = TRUE} for isotonic regression}
 \value{
 a data.table representing the forecasts forecast, but with
 \code{model} set to the value of the `model parameter. This will be in the
-forecast format produced by \code{\link[scoringutils:as_forecast]{scoringutils::as_forecast()}}
+forecast format produced by \code{\link[scoringutils:as_forecast_quantile]{scoringutils::as_forecast_quantile()}}
 }
 \description{
 Quantile Regression Average

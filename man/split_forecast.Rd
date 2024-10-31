@@ -8,7 +8,7 @@ split_forecast(forecast, forecast_unit, target)
 }
 \arguments{
 \item{forecast}{a data.table representing forecast; this is expected to
-have been created using \code{\link[scoringutils:as_forecast]{scoringutils::as_forecast()}}}
+have been created using \code{\link[scoringutils:as_forecast_quantile]{scoringutils::as_forecast_quantile()}}}
 
 \item{target}{the target for which to create the quantile regression
 average. This should be given as a vector of form \code{column = target},
@@ -20,7 +20,7 @@ a list with forecast (the forecast with models removed that have
 missing forecasts, and the target forecasts removed)
 }
 \description{
-Splits forecast into data and forecast, excludes any models aren't copmlete,
+Splits forecast into data and forecast, excludes any models aren't complete,
 and splits out the forecast target
 }
 \keyword{internal}

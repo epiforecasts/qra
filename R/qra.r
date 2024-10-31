@@ -88,12 +88,15 @@ qra_create_ensemble <- function(x, target, per_quantile_weights, intercept,
 #' containing the predictions), `data` (a data.table only containing the data)
 #' and `models` (a data.table listing the models and whether they are
 #' included)
-#' @importFrom data.table setorder dcast
+#' @importFrom data.table setorder dcast as.data.table
 #' @importFrom quantgen combine_into_array
 #' @keywords internal
 qra_preprocess_forecasts <- function(forecast) {
   forecast_unit <- get_forecast_unit(forecast)
   setorder(forecast, "quantile_level")
+
+  ## make forecast a pure data.table
+  forecast <- as.data.table(forecast)
 
   ## create data vector
   data <- forecast[,
@@ -124,7 +127,7 @@ qra_preprocess_forecasts <- function(forecast) {
 
 #' Split forecast
 #'
-#' Splits forecast into data and forecast, excludes any models aren't copmlete,
+#' Splits forecast into data and forecast, excludes any models aren't complete,
 #' and splits out the forecast target
 #' @inheritParams qra
 #' @return a list with forecast (the forecast with models removed that have
@@ -134,6 +137,8 @@ qra_preprocess_forecasts <- function(forecast) {
 #' @autoglobal
 split_forecast <- function(forecast, forecast_unit, target) {
   forecast_unit <- get_forecast_unit(forecast)
+  ## make forecast a pure data.table
+  forecast <- as.data.table(forecast)
   ## check for missing values by first creating a complete set of grouping and
   ## pooling variables
   present <- unique(
@@ -147,8 +152,8 @@ split_forecast <- function(forecast, forecast_unit, target) {
     forecast, complete_set, by = colnames(complete_set), all.y = TRUE
   )
   ## check for each model whether any column has an na
-  models <- as.data.table(merged[, list(included = !anyNA(.SD)), by = model])
-  present_models <- as.data.table(present[, as.list(models), by = present])
+  models <- merged[, list(included = !anyNA(.SD)), by = model]
+  present_models <- present[, as.list(models), by = present]
 
   ## remove models with missing forecasts
   forecast <- forecast[model %in% models[included == TRUE, model]]
@@ -170,7 +175,7 @@ split_forecast <- function(forecast, forecast_unit, target) {
 ##' @title Quantile Regression Average
 ##' Calculates a quantile regression average for forecasts.
 ##' @param forecast a data.table representing forecast; this is expected to
-##'   have been created using [scoringutils::as_forecast()]
+##'   have been created using [scoringutils::as_forecast_quantile()]
 ##' @param target the target for which to create the quantile regression
 ##'   average. This should be given as a vector of form `column = target`,
 ##'   where target is the value of column that represents the target. Note that
@@ -186,11 +191,11 @@ split_forecast <- function(forecast, forecast_unit, target) {
 ##' @inheritParams qra_create_ensemble
 ##' @return a data.table representing the forecasts forecast, but with
 ##'   \code{model} set to the value of the `model parameter. This will be in the
-##'   forecast format produced by [scoringutils::as_forecast()]
+##'   forecast format produced by [scoringutils::as_forecast_quantile()]
 ##' @autoglobal
-##' @importFrom data.table rbindlist setattr
+##' @importFrom data.table rbindlist setattr as.data.table
 ##' @importFrom purrr transpose map map2
-##' @importFrom scoringutils as_forecast
+##' @importFrom scoringutils as_forecast_quantile
 ##' @importFrom checkmate assert_class
 ##' @export
 qra <- function(forecast, target, group = c(),
@@ -202,12 +207,13 @@ qra <- function(forecast, target, group = c(),
   forecast_unit <- get_forecast_unit(forecast)
 
   ## filter out missing forecasts
+  forecast <- as.data.table(forecast)
   forecast <- forecast[!is.na(predicted)]
 
   ## first, split by group
   ensemble <- split(forecast, by = group)
-  ## next, re-convert to forecast format0
-  ensemble <- map(ensemble, as_forecast, forecast_unit = forecast_unit)
+  ## next, re-convert to forecast format
+  ensemble <- map(ensemble, as_forecast_quantile, forecast_unit = forecast_unit)
   ## next, split off target forecasts and check for completeness
   ensemble <- transpose(map(ensemble, split_forecast, forecast_unit, target))
   ## now, determine weights and intercepts
@@ -227,11 +233,11 @@ qra <- function(forecast, target, group = c(),
   ## pull together
   ensemble <- map(ensemble, rbindlist)
 
-  ret <- as_forecast(ensemble[["ensemble"]][, model := ..model])
+  ret <- as_forecast_quantile(ensemble[["ensemble"]][, model := ..model])
   setattr(ret, "weights", ensemble[["weights"]])
   setattr(ret, "intercept", ensemble[["intercept"]])
   setattr(ret, "models", ensemble[["models"]])
-  setattr(ret, "class", c("qra", class(ret)))
+  setattr(ret, "class", c("forecast_quantile", "qra", class(ret)[-1]))
 
   return(ret)
 }

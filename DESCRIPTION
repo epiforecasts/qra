@@ -21,7 +21,9 @@ Imports:
   scoringutils
 Suggests:
     roxyglobals
-Remotes: ryantibs/quantgen/quantgen
+Remotes: 
+    ryantibs/quantgen/quantgen,
+    epiforecasts/scoringutils@b370557
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
