@@ -15,10 +15,11 @@ Description: Performs quantile regression average
 Depends:
     R (>= 4.1.0)
 Imports:
-  checkmate,
-  data.table,
-  quantgen,
-  scoringutils
+    checkmate,
+    data.table,
+    purrr,
+    quantgen,
+    scoringutils
 Suggests:
     roxyglobals
 Remotes: 
