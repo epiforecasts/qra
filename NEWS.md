@@ -1,4 +1,4 @@
-# qra (development version)
+# qra 0.1.1
 
 - Fixed missing purrr import
 
